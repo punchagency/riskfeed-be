@@ -2,7 +2,7 @@ import { CanActivate, ExecutionContext, Injectable, UnauthorizedException } from
 import jwt from 'jsonwebtoken';
 import CONFIG from '../config/config';
 import User from '../models/user.model';
-import { JwtPayload } from '@/user/user.service';
+import { JwtPayload } from '@/modules/user/user.service';
 
 @Injectable()
 export class JwtAuthGuard implements CanActivate {

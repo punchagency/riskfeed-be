@@ -9,6 +9,8 @@ import { FileFieldsInterceptor } from '@nestjs/platform-express';
 import { fileUploadService } from '@/integrations/fileUpload';
 import type AuthenticatedRequest from '@/auth/auth-user.interface';
 
+import { InviteContractorDto } from './dto/invite-contractor.dto';
+
 @Controller('projects')
 @UseGuards(JwtAuthGuard)
 export class ProjectController {
@@ -72,5 +74,12 @@ export class ProjectController {
   @UseGuards(RolesGuard)
   suggestContractorForProject(@Param('id') id: string, @Req() req: AuthenticatedRequest) {
     return this.projectService.suggestContractorForProject(id, req.user._id);
+  }
+
+  @Post(':id/invite-contractor')
+  @Roles('user')
+  @UseGuards(RolesGuard)
+  inviteContractor(@Param('id') id: string, @Req() req: AuthenticatedRequest, @Body() inviteContractorDto: InviteContractorDto) {
+    return this.projectService.inviteToBid(id, req.user._id, inviteContractorDto.contractorId);
   }
 }

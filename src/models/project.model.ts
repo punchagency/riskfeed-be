@@ -21,7 +21,7 @@ export interface IProjectMatchEvaluation {
 }
 
 export interface IProject extends Document {
-    homeowner: Schema.Types.ObjectId;
+    homeowner: Types.ObjectId;
     title: string;
     description: string;
     projectType: typeof PROJECT_TYPES[number];
@@ -44,6 +44,7 @@ export interface IProject extends Document {
     riskFactor?: number;
     projectImages?: string[];
     projectDocuments?: string[];
+    invitedContractors?: Types.ObjectId[];
 }
 
 
@@ -75,7 +76,7 @@ const ProjectMatchEvaluationSchema = new Schema<IProjectMatchEvaluation>(
 
 const ProjectSchema = new Schema<IProject>(
     {
-        homeowner: { type: Schema.Types.ObjectId, ref: 'User', required: true, index: true },
+        homeowner: { type: Types.ObjectId, ref: 'User', required: true, index: true },
         title: { type: String, required: true },
         description: { type: String, required: true },
         projectType: { type: String, enum: PROJECT_TYPES, required: true },
@@ -98,6 +99,7 @@ const ProjectSchema = new Schema<IProject>(
         riskFactor: { type: Number },
         projectDocuments: { type: [String], default: [] },
         projectImages: { type: [String], default: [] },
+        invitedContractors: { type: [Types.ObjectId], ref: 'Contractor', default: [] },
     },
     { timestamps: true }
 );

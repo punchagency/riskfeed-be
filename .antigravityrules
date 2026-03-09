@@ -1,0 +1,649 @@
+# RiskFeed Server — AI Agent Rules
+
+> You are an exceptionally talented and thoughtful professional Nest.js backend developer. You write clean, maintainable, production-grade TypeScript. You follow every convention documented below **exactly**. When in doubt, look at existing code in the repository for precedent before inventing new patterns.
+
+---
+
+## 1. Project Overview
+
+| Detail | Value |
+|---|---|
+| **Framework** | Nest.js 11 (TypeScript) |
+| **Database** | MongoDB via Mongoose 9 |
+| **Cache / Queue broker** | Redis (ioredis) + Bull queues |
+| **Validation** | `class-validator` + `class-transformer` DTOs, global `ValidationPipe` |
+| **API docs** | Swagger via `swagger-jsdoc` + `swagger-ui-express` |
+| **Date/Time** | Luxon (`DateTime`) |
+
+---
+
+## 2. Project Structure
+
+```
+src/
+├── auth/               # Guards and decorators (JwtAuthGuard, RolesGuard, @Roles)
+├── config/
+│   ├── config.ts       # Runtime config (env vars, Redis, JWT, CORS, settings)
+│   ├── constant.ts     # Static constant values
+│   ├── database.ts     # MongoDB connection
+│   └── swagger.ts      # Swagger/OpenAPI setup
+├── docs/               # Swagger JSDoc documentation files (*.docs.ts)
+├── integrations/
+│   ├── QueueManager.ts # Bull queue wrappers (addEmailJob, addNotificationJob)
+│   ├── Redis.ts        # Redis connection & RedisObject singleton
+│   ├── fileUpload.ts   # S3 file upload middleware
+│   └── stripe.ts       # Stripe integration
+├── middleware/          # Express-style NestJS middleware (e.g. RateLimitMiddleware)
+├── models/             # Mongoose schemas & TypeScript interfaces
+├── utils/              # Shared utilities (see §3)
+├── <module>/           # Feature modules (controller, service, module, dto/)
+│   ├── dto/            # Request DTOs (class-validator)
+│   ├── entities/       # (optional) Entity definitions
+│   ├── <module>.controller.ts
+│   ├── <module>.service.ts
+│   └── <module>.module.ts
+├── app.module.ts
+└── main.ts
+```
+
+**When creating a new feature**, always scaffold the full module structure:
+`<module>.module.ts`, `<module>.controller.ts`, `<module>.service.ts`, and a `dto/` directory for all input DTOs.
+
+---
+
+## 3. Utility Reference — What to Use and When
+
+### 3.1 Error Handling — `catchError`
+
+**Import:** `import catchError from '@/utils/catchError';`
+
+Use `catchError` to wrap any `Promise` so errors are returned as values instead of thrown. It returns a tuple: `[error]` or `[undefined, data]`.
+
+```typescript
+const [error, user] = await catchError(User.findById(userId));
+if (error) {
+    logError({ message: 'Failed to find user', source: 'UserService.getUser', error });
+    throw new NotFoundException('User not found');
+}
+```
+
+**Rules:**
+- Always destructure the tuple immediately.
+- Always handle the error branch first (early return / throw).
+- Use `catchError` around external service calls, database calls where you need granular error handling, or any call that may fail silently.
+
+---
+
+### 3.2 Logging — `SystemLogs`
+
+**Import:** `import { logInfo, logError, logWarning, logCritical } from '@/utils/SystemLogs';`
+
+| Function | When to use |
+|---|---|
+| `logInfo` | Successful operations, audit events, informational messages |
+| `logWarning` | Unexpected but non-fatal situations |
+| `logError` | Recoverable errors, failed operations |
+| `logCritical` | Unrecoverable errors, security incidents (flushed immediately) |
+
+**Always provide `message` and `source`.** The `source` should follow the format `ClassName.methodName` or `FileName.functionName`.
+
+```typescript
+logError({
+    message: 'Failed to create invoice',
+    source: 'StripeService.createInvoice',
+    error,
+    additionalData: { userId, bookingId }
+});
+```
+
+**Rules:**
+- Never use bare `console.log` / `console.error` in services or controllers. Use the SystemLog functions.
+- Include `additionalData` with relevant IDs for traceability.
+- Use `logCritical` only for truly critical failures (payment failures, security breaches, data corruption).
+
+---
+
+### 3.3 JSON Parsing — `TryParseJSON`
+
+**Import:** `import TryParseJSON from '@/utils/try-parse-json';`
+
+Always use `TryParseJSON` instead of raw `JSON.parse`. It is generic, handles `null`/`undefined`/objects transparently, and never throws.
+
+```typescript
+const settings = TryParseJSON<UserSettings>(rawString, { theme: 'dark' });
+```
+
+---
+
+### 3.4 Sending Emails — `addEmailJob`
+
+**Import:** `import { addEmailJob } from '@/integrations/QueueManager';`
+
+**Never** call `SendMail` directly. Always use `addEmailJob` to enqueue emails through the Bull queue (or in-memory fallback when Redis is unavailable).
+
+```typescript
+await addEmailJob({
+    email: user.email,
+    subject: 'Your RiskFeed verification code',
+    html: `<p>Your code is: <strong>${code}</strong></p>`,
+});
+```
+
+---
+
+### 3.5 Creating Notifications — `addNotificationJob`
+
+**Import:** `import { addNotificationJob } from '@/integrations/QueueManager';`
+
+```typescript
+await addNotificationJob({
+    recipientId: user._id,
+    type: 'system',
+    priority: 'high',
+    title: 'Account Verified',
+    message: 'Your account has been verified successfully.',
+});
+```
+
+---
+
+### 3.6 Generating IDs / OTPs
+
+| Utility | Import | Purpose |
+|---|---|---|
+| `MakeID(length)` | `import MakeID from '@/utils/MakeID'` | Alphanumeric codes (activation, reset). Excludes ambiguous characters. |
+| `generateOTP(length)` | `import { generateOTP } from '@/utils/general'` | Numeric-only one-time passwords. |
+
+---
+
+### 3.7 Validation Helpers — `Validate`
+
+**Import:** `import Validate from '@/utils/Validate';`
+
+Use for server-side validation checks beyond what DTOs cover (e.g., in service methods):
+
+```typescript
+if (!Validate.mongoId(userId)) throw new BadRequestException('Invalid user ID');
+if (!Validate.email(payload.email)) throw new BadRequestException('Invalid email');
+```
+
+Key validators: `email`, `phone`, `mongoId`, `password`, `isEmpty`, `isNotEmpty`, `oneOf`, `string`, `array`, `date`, `URL`.
+
+---
+
+### 3.8 Redis Utilities — `RedisUtils`
+
+**Import:** `import { RedisUtils } from '@/utils/RedisUtils';`
+
+All Redis utility methods gracefully fall back to in-memory when Redis is unavailable. Use the class methods for:
+
+- **Caching:** `cacheUser`, `getCachedUser`, `invalidateUserCache`, `cacheQuery`, `getCachedQuery`
+- **Rate limiting:** `checkRateLimit`
+- **Sessions:** `setUserSession`, `getUserSession`, `deleteUserSession`
+- **Temporary data:** `storeTempData`, `getTempData`, `deleteTempData`
+- **Online status:** `setUserOnline`, `setUserOffline`, `getUserOnlineStatus`
+
+Always check `RedisUtils.isRedisAvailable()` if you need conditional logic around Redis.
+
+---
+
+### 3.9 Queue Manager — `QueueManager`
+
+**Import:** `import { addEmailJob, addNotificationJob } from '@/integrations/QueueManager';`
+
+Use `QueueManager` functions for **all deferred/background operations** (emails, notifications). The manager automatically falls back to direct execution if Redis/Bull is unavailable.
+
+---
+
+### 3.10 Date and Time — Luxon
+
+**Import:** `import { DateTime } from 'luxon';`
+
+- Always use `DateTime` from Luxon for date/time manipulation, comparisons, and formatting.
+- Never use raw `new Date()` for manipulations. `new Date()` is acceptable only for simple timestamp captures (e.g., `Date.now()`).
+
+```typescript
+const expiresAt = DateTime.now().plus({ minutes: 10 }).toJSDate();
+const isExpired = DateTime.fromJSDate(expiresAt) < DateTime.now();
+```
+
+---
+
+## 4. Configuration & Constants
+
+| Purpose | File | Usage |
+|---|---|---|
+| Runtime config (env-dependent) | `src/config/config.ts` | `import CONFIG from '@/config/config'` |
+| Static constants (enums, magic numbers) | `src/config/constant.ts` | `import CONSTANTS from '@/config/constant'` |
+
+**Rules:**
+- Never hardcode values that could change. Put them in `config.ts` (if environment-dependent) or `constant.ts` (if static).
+- Access settings via `CONFIG.settings.*`, Redis via `CONFIG.redis.*`, etc.
+- Pagination default: `CONFIG.settings.PAGINATION_LIMIT` (30).
+
+---
+
+## 5. Authentication & Authorization
+
+### Guards
+
+| Guard | Purpose | How to use |
+|---|---|---|
+| `JwtAuthGuard` | Verifies JWT access token, attaches `req.user` | `@UseGuards(JwtAuthGuard)` |
+| `RolesGuard` | Enforces role-based access after JWT auth | `@UseGuards(JwtAuthGuard, RolesGuard)` |
+
+### Roles Decorator
+
+```typescript
+import { Roles } from '@/auth/roles.decorator';
+
+@Roles('admin')
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Get('admin/users')
+getAllUsers() { ... }
+```
+
+**Available roles:** `'admin'`, `'user'`, `'contractor'`
+
+**Rules:**
+- Always apply `JwtAuthGuard` before `RolesGuard`.
+- Protected endpoints must always have `@UseGuards(JwtAuthGuard)` at minimum.
+- Admin-only endpoints must additionally use `@Roles('admin')` + `RolesGuard`.
+- Access the authenticated user via `req.user` (full Mongoose document).
+
+---
+
+## 6. DTOs & Input Validation
+
+### Mandatory DTO Rules
+
+1. **Every endpoint that accepts user input MUST have a DTO** in the module's `dto/` directory.
+2. Use `class-validator` decorators to validate and sanitize every field.
+3. Use `class-transformer`'s `@Type(() => ...)` for nested objects and arrays.
+4. Use `@IsOptional()` for optional fields.
+5. Reference enum values from models using `@IsEnum(MODEL_ENUM)`.
+6. The global `ValidationPipe` (configured in `main.ts`) will auto-strip unknown fields (`whitelist: true`) and auto-transform types (`transform: true`).
+
+### DTO Naming Convention
+
+- `Create<Entity>Dto` — for creation endpoints
+- `Update<Entity>Dto` — for update endpoints (all fields optional)
+- `<Action>Dto` — for specific actions (e.g., `LoginDto`, `ActivateAccountDto`)
+- Group related small DTOs in a single file (e.g., `auth-requests.dto.ts`)
+
+### Example DTO
+
+```typescript
+import { IsString, IsEmail, IsOptional, MinLength, ValidateNested, IsEnum } from 'class-validator';
+import { Type } from 'class-transformer';
+
+class AddressDto {
+    @IsString()
+    street: string;
+
+    @IsString()
+    city: string;
+
+    @IsString()
+    state: string;
+
+    @IsString()
+    zipcode: string;
+
+    @IsString()
+    country: string;
+}
+
+export class CreateUserDto {
+    @IsString()
+    firstName: string;
+
+    @IsString()
+    lastName: string;
+
+    @IsEmail()
+    email: string;
+
+    @IsString()
+    @MinLength(6)
+    password: string;
+
+    @ValidateNested()
+    @Type(() => AddressDto)
+    address: AddressDto;
+
+    @IsOptional()
+    @IsString()
+    profilePicture?: string;
+}
+```
+
+---
+
+## 7. Database Rules (Mongoose / MongoDB)
+
+### Query Performance
+
+1. **Never nest database queries inside loops.** Fetch all required data in bulk first, then process in memory.
+
+    ```typescript
+    // ❌ BAD — N+1 query problem
+    for (const id of userIds) {
+        const user = await User.findById(id);
+        results.push(user);
+    }
+
+    // ✅ GOOD — Single bulk query
+    const users = await User.find({ _id: { $in: userIds } });
+    ```
+
+2. **Use `Promise.all` for independent parallel queries.**
+
+    ```typescript
+    const [users, projects, notifications] = await Promise.all([
+        User.find({ status: 'active' }).lean(),
+        Project.find({ ownerId: userId }).lean(),
+        NotificationModel.find({ reciepientId: userId }).lean(),
+    ]);
+    ```
+
+3. **Use `.lean()` for read-only operations.** It returns plain JavaScript objects (faster, less memory).
+
+    ```typescript
+    // ✅ Read-only — use lean()
+    const users = await User.find({ status: 'active' }).lean();
+
+    // ✅ Need to modify and save — do NOT use lean()
+    const user = await User.findById(userId);
+    user.status = 'active';
+    await user.save();
+    ```
+
+4. **Always add indexes** for fields used in frequent queries, filters, or sorts. Define them in the model schema.
+
+5. **Use projections** to select only needed fields when possible.
+
+    ```typescript
+    const user = await User.findById(userId).select('firstName lastName email role').lean();
+    ```
+
+6. **Minimize query complexity time.** Prefer indexed queries, avoid `$where`, limit use of `$regex` on large collections.
+
+## 8. Error Handling Architecture
+
+### Custom Error Classes
+
+Use specific HTTP exception classes from `@nestjs/common` for standard errors:
+
+| Error Type | Status | NestJS Class |
+|---|---|---|
+| Validation error | 400 | `BadRequestException` |
+| Authentication failure | 401 | `UnauthorizedException` |
+| Insufficient permissions | 403 | `ForbiddenException` |
+| Resource not found | 404 | `NotFoundException` |
+| Resource conflict | 409 | `ConflictException` |
+| Internal server error | 500 | `InternalServerErrorException` |
+
+For external service failures (Stripe, SendGrid, S3), use custom error classes with rich context:
+
+```typescript
+throw new ExternalServiceError(
+    'Failed to create Stripe invoice',
+    'Stripe',
+    'createInvoice',
+    { bookingId, userId }
+);
+```
+
+### Error Handling Pattern in Services
+
+```typescript
+async createInvoice(userId: string, data: CreateInvoiceDto) {
+    const [findError, user] = await catchError(User.findById(userId));
+    if (findError) {
+        logError({ message: 'Database error finding user', source: 'InvoiceService.createInvoice', error: findError });
+        throw new InternalServerErrorException('Failed to process request');
+    }
+    if (!user) {
+        throw new NotFoundException('User not found');
+    }
+
+    const [stripeError, invoice] = await catchError(
+        stripeClient.invoices.create({ customer: user.stripeCustomerId })
+    );
+    if (stripeError) {
+        logCritical({
+            message: 'Stripe invoice creation failed',
+            source: 'InvoiceService.createInvoice',
+            error: stripeError,
+            additionalData: { userId, stripeCustomerId: user.stripeCustomerId }
+        });
+        throw new ExternalServiceError('Failed to create invoice', 'Stripe', 'createInvoice', { userId });
+    }
+
+    return { success: true, data: invoice, message: 'Invoice created successfully' };
+}
+```
+
+## 9. API Response Patterns
+
+### Success Responses
+
+```typescript
+// Single resource
+return {
+    success: true,
+    data: result,
+    message: 'Operation completed successfully',
+};
+
+// With user info
+return {
+    message: 'Login successful',
+    user: this.sanitizeUser(user),
+    accessToken,
+    refreshToken,
+};
+```
+
+### Standard Pagination Query Parameters
+
+Always accept `page` and `limit` query parameters. Default limit is `CONFIG.settings.PAGINATION_LIMIT` (30).
+
+```typescript
+async findAll(page: number = 1, limit: number = CONFIG.settings.PAGINATION_LIMIT) {
+    const skip = (page - 1) * limit;
+    const [items, total] = await Promise.all([
+        Entity.find().skip(skip).limit(limit).lean(),
+        Entity.countDocuments(),
+    ]);
+
+    return {
+        items,
+        pagination: {
+            total,
+            page,
+            pages: Math.ceil(total / limit),
+            limit,
+        },
+    };
+}
+```
+
+## 10. Swagger / API Documentation
+
+### Rules
+
+1. **Every new endpoint MUST have Swagger documentation.**
+2. **When an existing endpoint is modified, update its Swagger doc immediately.**
+3. Swagger docs live in `src/docs/<module>.docs.ts` files using JSDoc-style `@swagger` annotations.
+4. Swagger reads from the file glob `./src/docs/*.ts` (configured in `src/config/swagger.ts`).
+5. **Always include:** summary, tags, request body schema (with required fields), response schemas, and security requirements.
+6. Register new tags in `src/config/swagger.ts` under `swaggerDefinition.tags`.
+7. All paths must start with `/api/v1/`.
+8. Protected endpoints must include `security: - bearerAuth: []`.
+
+### Swagger Doc Template
+
+```typescript
+/**
+ * @swagger
+ * /api/v1/<module>/<path>:
+ *   post:
+ *     summary: Short description of the endpoint
+ *     tags: [<ModuleName>]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - field1
+ *               - field2
+ *             properties:
+ *               field1:
+ *                 type: string
+ *               field2:
+ *                 type: number
+ *     responses:
+ *       200:
+ *         description: Success description
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 data:
+ *                   type: object
+ *                 message:
+ *                   type: string
+ *       400:
+ *         description: Bad request
+ *       401:
+ *         description: Unauthorized
+ *       404:
+ *         description: Not found
+ */
+```
+
+---
+
+## 11. Redis Conventions
+
+- Redis is **optional in production.** All Redis-dependent code must gracefully fall back when Redis is unavailable.
+- Always use `RedisUtils` (which handles fallbacks) rather than calling `RedisObject` directly.
+- Use the configured TTL values from `CONFIG.redis.cacheTTL.*`.
+- Key naming convention: `<category>:<identifier>`, e.g., `user:abc123`, `query:active-projects`, `ratelimit:192.168.1.1:/api/v1/login`.
+
+---
+
+## 12. Module Registration
+
+When creating a new module:
+
+1. Generate controller, service, and module files.
+2. Create a `dto/` directory inside the module folder.
+3. **Register the module** in `src/app.module.ts` under `imports`.
+4. If the module needs middleware, configure it in `AppModule.configure()`.
+5. If the module needs file upload middleware, add it in `AppModule.configure()`.
+
+---
+
+## 13. File Uploads
+
+- Use the existing `fileUpload.ts` integration for S3 uploads.
+- Apply upload middleware in `AppModule.configure()` for specific routes.
+- Store the S3 URL (from `file.location`) in the database, not the file itself.
+
+---
+
+## 14. Security Rules
+
+1. **Never return passwords, tokens, or secrets** in API responses. Always sanitize.
+2. Refresh tokens are stored as bcrypt hashes in the database.
+3. Rate limiting is applied globally via `RateLimitMiddleware` (300 requests / 60 seconds per IP+path).
+4. Use the `@Roles()` decorator + `RolesGuard` for role-based access control.
+5. Always normalize email to lowercase and trim whitespace before queries.
+
+---
+
+## 15. Coding Standards
+
+### General
+
+- Use TypeScript strict mode conventions.
+- Use `async/await` — never raw `.then()` chains except inside `catchError`.
+- Use `@Injectable()` on all services.
+- Controllers should be thin — delegate all logic to services.
+- One service per module. The service contains all business logic.
+- Use path aliases (`@/`) for imports (configured in `tsconfig.json`).
+
+### Naming Conventions
+
+| Item | Convention | Example |
+|---|---|---|
+| Files | kebab-case or camelCase (match existing) | `user.service.ts`, `catchError.ts` |
+| Classes | PascalCase | `UserService`, `JwtAuthGuard` |
+| Interfaces | `I` prefix + PascalCase | `IUser`, `IContractor` |
+| Constants/Enums | UPPER_SNAKE_CASE | `ROLES`, `USER_STATUSES` |
+| Functions | camelCase | `addEmailJob`, `logError` |
+| DTOs | PascalCase + `Dto` suffix | `RegisterUserDto`, `LoginDto` |
+| Models | PascalCase + `.model.ts` suffix | `user.model.ts` |
+| Docs | PascalCase + `.docs.ts` suffix | `user.docs.ts` |
+
+### Imports Order
+
+1. NestJS / Node built-ins
+2. Third-party libraries
+3. Config imports (`@/config/*`)
+4. Model imports (`@/models/*`)
+5. Utility imports (`@/utils/*`)
+6. Integration imports (`@/integrations/*`)
+7. Local module imports (DTOs, etc.)
+
+---
+
+## 16. Anti-Patterns — What NOT To Do
+
+| ❌ Don't | ✅ Do |
+|---|---|
+| `console.log()` in services/controllers | `logInfo()`, `logError()`, etc. from SystemLogs |
+| `JSON.parse()` directly | `TryParseJSON(data, defaultValue)` |
+| Call `SendMail()` directly | `addEmailJob()` via QueueManager |
+| Call `createNotification()` directly | `addNotificationJob()` via QueueManager |
+| Hardcode config values | Use `CONFIG.*` or `CONSTANTS.*` |
+| Nest DB queries inside loops | Bulk fetch with `$in`, then process in memory |
+| Sequential independent DB queries | `Promise.all([query1, query2, ...])` |
+| Return full user objects with passwords | `sanitizeUser()` or select/project specific fields |
+| Use `new Date()` for date manipulation | Use `DateTime` from Luxon |
+| Skip DTO validation | Create DTO with `class-validator` decorators for every input |
+| Use `any` type freely | Use typed interfaces from models |
+| Create endpoints without Swagger docs | Always write `@swagger` JSDoc in `src/docs/<module>.docs.ts` |
+| Skip `.lean()` on read-only queries | Always use `.lean()` when you don't need Mongoose methods |
+| Direct Redis calls without fallback | Use `RedisUtils` which handles graceful fallbacks |
+
+---
+
+## 17. Checklist Before Completing Any Task
+
+- [ ] All user inputs validated via DTOs with `class-validator`
+- [ ] Error handling uses `catchError` + appropriate NestJS exceptions
+- [ ] All errors and key info logged via `SystemLogs` (`logInfo`, `logError`, `logWarning`, `logCritical`)
+- [ ] Emails sent via `addEmailJob`, notifications via `addNotificationJob`
+- [ ] Database queries optimized (no nested loops, `Promise.all` for parallel, `.lean()` for reads)
+- [ ] Swagger documentation created/updated in `src/docs/<module>.docs.ts`
+- [ ] Sensitive data sanitized in responses
+- [ ] Auth guards applied to protected endpoints
+- [ ] Role checks applied where needed (`@Roles()` + `RolesGuard`)
+- [ ] Config values used from `CONFIG` or `CONSTANTS` — no hardcoded values
+- [ ] New module registered in `app.module.ts`
+- [ ] Dates handled with Luxon `DateTime`
+- [ ] Redis usage goes through `RedisUtils` (graceful fallback)
+- [ ] JSON parsing uses `TryParseJSON`
+
+# Ask me clarifying question until you are 95% certain that you have enough information to build or integrate any implementations.

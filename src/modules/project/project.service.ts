@@ -7,6 +7,7 @@ import catchError from '@/utils/catchError';
 import { logError, logInfo } from '@/utils/SystemLogs';
 import Validate from '@/utils/Validate';
 import Contractor from '@/models/contractor.model';
+import { addEmailJob } from '@/integrations/QueueManager';
 
 @Injectable()
 export class ProjectService {
@@ -186,10 +187,14 @@ export class ProjectService {
     const property = project.property as any;
     const projectCity = property?.address?.city;
     const projectState = property?.address?.state;
+    const invitedContractors = project.invitedContractors || [];
 
     // Find contractors that provide the required service
     const [contractorsError, contractors] = await catchError(
-      Contractor.find({ services: { $in: [projectType] } }).populate('user').lean()
+      Contractor.find({ 
+        _id: { $nin: invitedContractors },
+        services: { $in: [projectType] } 
+      }).populate('user').lean()
     );
 
     if (contractorsError) {
@@ -273,6 +278,75 @@ export class ProjectService {
       success: true, 
       data: evaluatedContractors, 
       message: 'Contractors suggested successfully' 
+    };
+  }
+  async inviteToBid(projectId: string, userId: string, contractorId: string) {
+    if (!Validate.mongoId(projectId)) {
+      throw new BadRequestException('Invalid project ID');
+    }
+
+    if (!Validate.mongoId(contractorId)) {
+      throw new BadRequestException('Invalid contractor ID');
+    }
+
+    const [error, project] = await catchError(
+      Project.findById(projectId).populate('homeowner', 'firstName lastName').lean()
+    );
+
+    if (error) {
+      logError({ message: 'Failed to fetch project', source: 'ProjectService.inviteToBid', error });
+      throw new BadRequestException('Failed to fetch project');
+    }
+
+    if (!project) {
+      throw new NotFoundException('Project not found');
+    }
+
+    if (project.homeowner._id.toString() !== userId.toString()) {
+      throw new ForbiddenException('You can only invite contractors to your own projects');
+    }
+
+    const [contractorError, contractor] = await catchError(
+      Contractor.findById(contractorId).lean()
+    );
+
+    if (contractorError) {
+      logError({ message: 'Failed to fetch contractor', source: 'ProjectService.inviteToBid', error: contractorError });
+      throw new BadRequestException('Failed to fetch contractor');
+    }
+
+    if (!contractor) {
+      throw new NotFoundException('Contractor not found');
+    }
+
+    const [updateError] = await catchError(
+      Project.findByIdAndUpdate(projectId, { $addToSet: { invitedContractors: contractorId } })
+    );
+
+    if (updateError) {
+      logError({ message: 'Failed to invite contractor', source: 'ProjectService.inviteToBid', error: updateError });
+      throw new BadRequestException('Failed to invite contractor');
+    }
+
+    const homeowner = project.homeowner as any;
+    const homeownerName = `${homeowner.firstName} ${homeowner.lastName}`;
+
+    await addEmailJob({
+      email: contractor.businessEmail,
+      subject: `Invitation to Bid: ${project.title}`,
+      html: `
+        <p>Hi ${contractor.businessName || contractor.companyName},</p>
+        <p><strong>${homeownerName}</strong> has invited you to bid on their project: <strong>${project.title}</strong>.</p>
+        <p>Please login to your RiskFeed account to view the project details and submit your proposal and quotation.</p>
+        <p>Best regards,<br>The RiskFeed Team</p>
+      `,
+    });
+
+    logInfo({ message: 'Contractor invited to bid', source: 'ProjectService.inviteToBid', additionalData: { projectId, userId, contractorId } });
+
+    return { 
+      success: true, 
+      message: 'Contractor invited to bid successfully' 
     };
   }
 }

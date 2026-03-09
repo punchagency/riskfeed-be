@@ -1,14 +1,14 @@
 import { Injectable, UnauthorizedException, BadRequestException, NotFoundException } from '@nestjs/common';
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
-import CONFIG from '../config/config';
-import User, { IUser, ROLES } from '../models/user.model';
-import ContractorModel from '../models/contractor.model';
-import MakeID from '../utils/MakeID';
+import CONFIG from '../../config/config';
+import User, { IUser, ROLES } from '../../models/user.model';
+import ContractorModel from '../../models/contractor.model';
+import MakeID from '../../utils/MakeID';
 import { RegisterUserDto } from './dto/register-user.dto';
 import { ActivateAccountDto, ChangePasswordDto, ForgotPasswordDto, LoginDto, RefreshTokenDto, ResendActivationCodeDto, ResendResetPasswordCodeDto, ResetPasswordDto, ValidateTokenDto} from './dto/auth-requests.dto';
 import { UpdateProfileDto } from './dto/update-profile.dto';
-import { addEmailJob } from '../integrations/QueueManager';
+import { addEmailJob } from '../../integrations/QueueManager';
 const SALT_ROUNDS = 10;
 
 export interface JwtPayload {

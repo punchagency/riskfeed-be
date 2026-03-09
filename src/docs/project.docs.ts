@@ -310,3 +310,53 @@
  *       404:
  *         description: Project not found
  */
+
+/**
+ * @swagger
+ * /api/v1/projects/{id}/invite-contractor:
+ *   post:
+ *     summary: Invite a contractor to bid on a project
+ *     tags: [Projects]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - contractorId
+ *             properties:
+ *               contractorId:
+ *                 type: string
+ *                 description: ID of the contractor to invite
+ *     responses:
+ *       200:
+ *         description: Contractor invited successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 data:
+ *                   type: object
+ *                 message:
+ *                   type: string
+ *       400:
+ *         description: Bad request (invalid ID or contractor already invited)
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Forbidden (user can only invite contractors to their own projects)
+ *       404:
+ *         description: Project not found
+ */

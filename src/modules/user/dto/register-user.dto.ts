@@ -1,9 +1,10 @@
-import { USER_STATUSES, ROLES, PROPERTY_TYPES, OWNERSHIP_TYPES, HEARD_ABOUT_SOURCES } from '../../models/user.model';
-import { TEAM_SIZE_BUCKETS } from '../../models/contractor.model';
+import { USER_STATUSES, ROLES, PROPERTY_TYPES, OWNERSHIP_TYPES, HEARD_ABOUT_SOURCES } from '../../../models/user.model';
+import { TEAM_SIZE_BUCKETS } from '../../../models/contractor.model';
 import {
   IsEmail,
   IsOptional,
   IsString,
+  MinLength,
   ValidateNested,
   IsEnum,
   IsBoolean,
@@ -14,29 +15,24 @@ import {
 import { Type } from 'class-transformer';
 import { PROJECT_TYPES } from '@/models/project.model';
 
-class UpdateAddressDto {
-  @IsOptional()
+class AddressDto {
   @IsString()
-  street?: string;
+  street: string;
 
-  @IsOptional()
   @IsString()
-  zipcode?: string;
+  zipcode: string;
 
-  @IsOptional()
   @IsString()
-  city?: string;
+  city: string;
 
-  @IsOptional()
   @IsString()
-  state?: string;
+  state: string;
 
-  @IsOptional()
   @IsString()
-  country?: string;
+  country: string;
 }
 
-class UpdateNotificationPreferencesDto {
+class NotificationPreferencesDto {
   @IsOptional()
   @IsBoolean()
   emailNotifications?: boolean;
@@ -50,19 +46,17 @@ class UpdateNotificationPreferencesDto {
   marketingCommunications?: boolean;
 }
 
-class UpdatePropertyDto {
-  @IsOptional()
+class PropertyDto {
   @IsEnum(PROPERTY_TYPES)
-  type?: typeof PROPERTY_TYPES[number];
+  type: typeof PROPERTY_TYPES[number];
 
   @IsOptional()
   @IsString()
   name?: string;
 
-  @IsOptional()
   @ValidateNested()
-  @Type(() => UpdateAddressDto)
-  address?: UpdateAddressDto;
+  @Type(() => AddressDto)
+  address: AddressDto;
 
   @IsOptional()
   @IsEnum(OWNERSHIP_TYPES)
@@ -73,24 +67,21 @@ class UpdatePropertyDto {
   notes?: string;
 }
 
-class UpdateHeardAboutDto {
-  @IsOptional()
+class HeardAboutDto {
   @IsEnum(HEARD_ABOUT_SOURCES)
-  source?: typeof HEARD_ABOUT_SOURCES[number];
+  source: typeof HEARD_ABOUT_SOURCES[number];
 
   @IsOptional()
   @IsString()
   otherDetails?: string;
 }
 
-class UpdateInsuranceDto {
-  @IsOptional()
+class InsuranceDto {
   @IsString()
-  provider?: string;
+  provider: string;
 
-  @IsOptional()
   @IsString()
-  policyNumber?: string;
+  policyNumber: string;
 
   @IsOptional()
   @IsString()
@@ -102,57 +93,48 @@ class UpdateInsuranceDto {
   expiryDate?: Date;
 }
 
-class UpdateContractorDataDto {
-  @IsOptional()
+class ContractorDataDto {
   @IsString()
-  companyName?: string;
+  companyName: string;
 
   @IsOptional()
   @IsString()
   businessName?: string;
 
-  @IsOptional()
   @IsString()
-  licenseNumber?: string;
+  licenseNumber: string;
 
-  @IsOptional()
   @IsNumber()
-  yearsInBusiness?: number;
+  yearsInBusiness: number;
 
-  @IsOptional()
   @IsString()
-  taxId?: string;
+  taxId: string;
 
   @IsOptional()
   @IsString()
   ownerName?: string;
 
-  @IsOptional()
   @IsString()
-  businessEmail?: string;
+  businessEmail: string;
 
-  @IsOptional()
   @IsString()
-  businessPhone?: string;
+  businessPhone: string;
 
   @IsOptional()
   @IsString()
   businessWebsite?: string;
 
-  @IsOptional()
   @ValidateNested()
-  @Type(() => UpdateAddressDto)
-  businessAddress?: UpdateAddressDto;
+  @Type(() => AddressDto)
+  businessAddress: AddressDto;
 
-  @IsOptional()
   @IsArray()
   @IsEnum(PROJECT_TYPES, { each: true })
-  services?: typeof PROJECT_TYPES[number][];
+  services: typeof PROJECT_TYPES[number][];
 
-  @IsOptional()
   @IsArray()
   @IsString({ each: true })
-  serviceAreas?: string[];
+  serviceAreas: string[];
 
   @IsOptional()
   @IsEnum(TEAM_SIZE_BUCKETS)
@@ -160,40 +142,39 @@ class UpdateContractorDataDto {
 
   @IsOptional()
   @ValidateNested()
-  @Type(() => UpdateInsuranceDto)
-  insurance?: UpdateInsuranceDto;
+  @Type(() => InsuranceDto)
+  insurance?: InsuranceDto;
 }
 
-export class UpdateProfileDto {
-  @IsOptional()
+export class RegisterUserDto {
   @IsString()
-  firstName?: string;
+  firstName: string;
 
-  @IsOptional()
   @IsString()
-  lastName?: string;
+  lastName: string;
 
-  @IsOptional()
   @IsEmail()
-  email?: string;
+  email: string;
 
-  @IsOptional()
   @IsString()
-  phoneNumber?: string;
+  phoneNumber: string;
+
+  @IsString()
+  @MinLength(6)
+  password: string;
 
   @IsOptional()
   @IsString()
   profilePicture?: string;
 
-  @IsOptional()
   @ValidateNested()
-  @Type(() => UpdateAddressDto)
-  address?: UpdateAddressDto;
+  @Type(() => AddressDto)
+  address: AddressDto;
 
   @IsOptional()
   @ValidateNested()
-  @Type(() => UpdateNotificationPreferencesDto)
-  notificationPreferences?: UpdateNotificationPreferencesDto;
+  @Type(() => NotificationPreferencesDto)
+  notificationPreferences?: NotificationPreferencesDto;
 
   @IsOptional()
   @IsEnum(ROLES)
@@ -211,18 +192,18 @@ export class UpdateProfileDto {
   @IsOptional()
   @IsArray()
   @ValidateNested({ each: true })
-  @Type(() => UpdatePropertyDto)
-  properties?: UpdatePropertyDto[];
+  @Type(() => PropertyDto)
+  properties?: PropertyDto[];
 
   @IsOptional()
   @ValidateNested()
-  @Type(() => UpdateHeardAboutDto)
-  heardAboutRiskfeed?: UpdateHeardAboutDto;
+  @Type(() => HeardAboutDto)
+  heardAboutRiskfeed?: HeardAboutDto;
 
   // Contractor fields
   @IsOptional()
   @ValidateNested()
-  @Type(() => UpdateContractorDataDto)
-  contractorData?: UpdateContractorDataDto;
+  @Type(() => ContractorDataDto)
+  contractorData?: ContractorDataDto;
 }
 
