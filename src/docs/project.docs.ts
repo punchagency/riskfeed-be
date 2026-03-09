@@ -337,6 +337,10 @@
  *               contractorId:
  *                 type: string
  *                 description: ID of the contractor to invite
+ *               message:
+ *                 type: string
+ *                 maxLength: 500
+ *                 description: Optional personal message to include in the invitation email
  *     responses:
  *       200:
  *         description: Contractor invited successfully
@@ -349,14 +353,25 @@
  *                   type: boolean
  *                 data:
  *                   type: object
+ *                   properties:
+ *                     contractor:
+ *                       type: string
+ *                     message:
+ *                       type: string
+ *                     status:
+ *                       type: string
+ *                       enum: [pending, accepted, rejected]
+ *                     invitedAt:
+ *                       type: string
+ *                       format: date-time
  *                 message:
  *                   type: string
  *       400:
- *         description: Bad request (invalid ID or contractor already invited)
+ *         description: Bad request (invalid ID, contractor already invited, or project status does not allow invitations)
  *       401:
  *         description: Unauthorized
  *       403:
  *         description: Forbidden (user can only invite contractors to their own projects)
  *       404:
- *         description: Project not found
+ *         description: Project or contractor not found
  */

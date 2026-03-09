@@ -84,6 +84,10 @@ export interface IContractor extends Document {
     certifications: IContractorCertification[];
     portfolio: IContractorPortfolioItem[];
     savedProjects: Schema.Types.ObjectId[];
+    riskScore: number;
+    activeProjects: number;
+    completedProjects: number;
+    averageBudget: number;
 }
 
 const ContractorReviewSchema = new Schema<IContractorReview>(
@@ -181,6 +185,10 @@ const ContractorSchema = new Schema<IContractor>(
         certifications: { type: [ContractorCertificationSchema], default: [] },
         portfolio: { type: [ContractorPortfolioSchema], default: [] },
         savedProjects: [{ type: Schema.Types.ObjectId, ref: 'Project' }],
+        riskScore: { type: Number, default: 0 },
+        activeProjects: { type: Number, default: 0 },
+        completedProjects: { type: Number, default: 0 },
+        averageBudget: { type: Number, default: 0 },
     },
     { timestamps: true }
 );

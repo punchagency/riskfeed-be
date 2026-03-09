@@ -80,6 +80,6 @@ export class ProjectController {
   @Roles('user')
   @UseGuards(RolesGuard)
   inviteContractor(@Param('id') id: string, @Req() req: AuthenticatedRequest, @Body() inviteContractorDto: InviteContractorDto) {
-    return this.projectService.inviteToBid(id, req.user._id, inviteContractorDto.contractorId);
+    return this.projectService.inviteToBid(id, req.user._id, inviteContractorDto.contractorId, inviteContractorDto.message);
   }
 }

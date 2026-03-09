@@ -187,12 +187,12 @@ export class ProjectService {
     const property = project.property as any;
     const projectCity = property?.address?.city;
     const projectState = property?.address?.state;
-    const invitedContractors = project.invitedContractors || [];
+    const invitedContractorIds = (project.invitations || []).map((inv: any) => inv.contractor.toString());
 
     // Find contractors that provide the required service
     const [contractorsError, contractors] = await catchError(
       Contractor.find({ 
-        _id: { $nin: invitedContractors },
+        _id: { $nin: invitedContractorIds },
         services: { $in: [projectType] } 
       }).populate('user').lean()
     );
@@ -280,7 +280,7 @@ export class ProjectService {
       message: 'Contractors suggested successfully' 
     };
   }
-  async inviteToBid(projectId: string, userId: string, contractorId: string) {
+  async inviteToBid(projectId: string, userId: string, contractorId: string, message?: string) {
     if (!Validate.mongoId(projectId)) {
       throw new BadRequestException('Invalid project ID');
     }
@@ -306,6 +306,19 @@ export class ProjectService {
       throw new ForbiddenException('You can only invite contractors to your own projects');
     }
 
+    // Only allow invitations on published or in_progress projects
+    if (project.status !== 'published' && project.status !== 'in_progress') {
+      throw new BadRequestException(`Cannot invite contractors to a project with status '${project.status}'`);
+    }
+
+    // Check if contractor has already been invited
+    const alreadyInvited = (project.invitations || []).some(
+      (inv: any) => inv.contractor.toString() === contractorId
+    );
+    if (alreadyInvited) {
+      throw new BadRequestException('This contractor has already been invited to this project');
+    }
+
     const [contractorError, contractor] = await catchError(
       Contractor.findById(contractorId).lean()
     );
@@ -319,8 +332,16 @@ export class ProjectService {
       throw new NotFoundException('Contractor not found');
     }
 
+    // Push a new invitation sub-document into the invitations array
+    const invitation = {
+      contractor: contractorId,
+      ...(message && { message }),
+      status: 'pending' as const,
+      invitedAt: new Date(),
+    };
+
     const [updateError] = await catchError(
-      Project.findByIdAndUpdate(projectId, { $addToSet: { invitedContractors: contractorId } })
+      Project.findByIdAndUpdate(projectId, { $push: { invitations: invitation } })
     );
 
     if (updateError) {
@@ -331,21 +352,27 @@ export class ProjectService {
     const homeowner = project.homeowner as any;
     const homeownerName = `${homeowner.firstName} ${homeowner.lastName}`;
 
+    const personalMessageBlock = message
+      ? `<p><strong>Personal message from ${homeownerName}:</strong></p><blockquote>${message}</blockquote>`
+      : '';
+
     await addEmailJob({
       email: contractor.businessEmail,
       subject: `Invitation to Bid: ${project.title}`,
       html: `
         <p>Hi ${contractor.businessName || contractor.companyName},</p>
         <p><strong>${homeownerName}</strong> has invited you to bid on their project: <strong>${project.title}</strong>.</p>
+        ${personalMessageBlock}
         <p>Please login to your RiskFeed account to view the project details and submit your proposal and quotation.</p>
         <p>Best regards,<br>The RiskFeed Team</p>
       `,
     });
 
-    logInfo({ message: 'Contractor invited to bid', source: 'ProjectService.inviteToBid', additionalData: { projectId, userId, contractorId } });
+    logInfo({ message: 'Contractor invited to bid', source: 'ProjectService.inviteToBid', additionalData: { projectId, userId, contractorId, hasMessage: !!message } });
 
     return { 
       success: true, 
+      data: invitation,
       message: 'Contractor invited to bid successfully' 
     };
   }

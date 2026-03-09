@@ -46,6 +46,10 @@ const swaggerDefinition: SwaggerDefinition = {
             name: 'Properties',
             description: 'Property management',
         },
+        {
+            name: 'Contractor',
+            description: 'Contractor search and management',
+        },
     ],
 };
 

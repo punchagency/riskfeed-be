@@ -1,4 +1,4 @@
-import { IsString, IsNotEmpty } from 'class-validator';
+import { IsString, IsNotEmpty, IsOptional, MaxLength } from 'class-validator';
 import Validate from '@/utils/Validate';
 import { Transform } from 'class-transformer';
 import { BadRequestException } from '@nestjs/common';
@@ -13,4 +13,9 @@ export class InviteContractorDto {
     return value;
   })
   contractorId: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(1000, { message: 'Personal message must not exceed 1000 characters' })
+  message?: string;
 }

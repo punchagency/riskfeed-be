@@ -4,6 +4,7 @@ export const PROJECT_STATUSES = ['draft', 'published', 'in_progress', 'completed
 export const PROJECT_MILESTONES_STATUSES = ['pending', 'in_progress', 'completed', 'cancelled',] as const;
 export const PROJECT_RISK_LEVELS = ['low', 'medium', 'high'] as const;
 export const PROJECT_TYPES = ['kitchen_remodeling',  'bathroom_remodeling',  'roofing',  'flooring',  'painting',  'electrical',  'plumbing',  'hvac',  'landscaping',  'deck_patio',  'basement_finishing',  'windows_doors',] as const;
+export const PROJECT_INVITATION_STATUSES = ['pending', 'accepted', 'rejected',] as const;
 export interface IProjectMilestone {
     name: string;
     percentage: number;
@@ -18,6 +19,14 @@ export interface IProjectMatchEvaluation {
     matchPercentage: number;
     riskFactor: number;
     evaluatedAt: Date;
+}
+
+export interface IProjectInvitation {
+    contractor: Types.ObjectId;
+    message?: string;
+    status: typeof PROJECT_INVITATION_STATUSES[number];
+    invitedAt: Date;
+    respondedAt?: Date;
 }
 
 export interface IProject extends Document {
@@ -44,7 +53,7 @@ export interface IProject extends Document {
     riskFactor?: number;
     projectImages?: string[];
     projectDocuments?: string[];
-    invitedContractors?: Types.ObjectId[];
+    invitations?: IProjectInvitation[];
 }
 
 
@@ -74,6 +83,17 @@ const ProjectMatchEvaluationSchema = new Schema<IProjectMatchEvaluation>(
     { _id: true }
 );
 
+const ProjectInvitationSchema = new Schema<IProjectInvitation>(
+    {
+        contractor: { type: Schema.Types.ObjectId, ref: 'Contractor', required: true },
+        message: { type: String },
+        status: { type: String, enum: PROJECT_INVITATION_STATUSES, default: 'pending' },
+        invitedAt: { type: Date, default: Date.now },
+        respondedAt: { type: Date },
+    },
+    { _id: true }
+);
+
 const ProjectSchema = new Schema<IProject>(
     {
         homeowner: { type: Types.ObjectId, ref: 'User', required: true, index: true },
@@ -99,7 +119,7 @@ const ProjectSchema = new Schema<IProject>(
         riskFactor: { type: Number },
         projectDocuments: { type: [String], default: [] },
         projectImages: { type: [String], default: [] },
-        invitedContractors: { type: [Types.ObjectId], ref: 'Contractor', default: [] },
+        invitations: { type: [ProjectInvitationSchema], default: [] },
     },
     { timestamps: true }
 );
