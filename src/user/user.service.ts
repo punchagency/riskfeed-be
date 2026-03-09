@@ -3,7 +3,7 @@ import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import CONFIG from '../config/config';
 import User, { IUser, ROLES } from '../models/user.model';
-import Contractor, { IContractor } from '../models/contractor.model';
+import ContractorModel from '../models/contractor.model';
 import MakeID from '../utils/MakeID';
 import { RegisterUserDto } from './dto/register-user.dto';
 import { ActivateAccountDto, ChangePasswordDto, ForgotPasswordDto, LoginDto, RefreshTokenDto, ResendActivationCodeDto, ResendResetPasswordCodeDto, ResetPasswordDto, ValidateTokenDto} from './dto/auth-requests.dto';
@@ -68,7 +68,7 @@ export class UserService {
 
     // Create contractor profile if contractor data provided
     if (contractorData && user.role === 'contractor') {
-      await Contractor.create({
+      await ContractorModel.create({
         ...contractorData,
         user: user._id,
       } as any);
@@ -232,28 +232,30 @@ export class UserService {
     };
   }
   async getUser(userId: string){
-    const user = await User.findById(userId);
+    const user = await User.findById(userId).select('-password -refreshToken -activationCode -activationCodeExpires -resetPasswordCode -resetPasswordCodeExpires');
     if (!user) {
       throw new NotFoundException('User not found');
     }
-    return this.sanitizeUser(user);
+    return user;
   }
   async getContractor(userId: string){
-    const contractor = await Contractor.findOne({ user: userId}).populate('user', 'firstName lastName email profilePicture');
+    const contractor = await ContractorModel.findOne({ user: userId});
     if (!contractor) {
       throw new NotFoundException('Contractor not found');
     }
     return contractor;
   }
   async getProfile(userId: string) {
-    const user: any = await User.findById(userId);
+    let response: any = {};
+    const user: any = await User.findById(userId).select('-password -refreshToken -activationCode -activationCodeExpires -resetPasswordCode -resetPasswordCodeExpires');
     if (!user) {
       throw new NotFoundException('User not found');
     }
+    response.user = user;
     if(user.role === "contractor"){
-      user.contractor = await this.getContractor(userId)
+      response.contractor = await this.getContractor(user._id.toString())
     }
-    return this.sanitizeUser(user);
+    return response;
   }
   async updateProfile(userId: string, payload: UpdateProfileDto) {
     const user = await User.findById(userId);
@@ -316,12 +318,12 @@ export class UserService {
 
     // Update contractor profile if contractor data provided
     if (payload.contractorData && user.role === 'contractor') {
-      const contractor = await Contractor.findOne({ user: user._id as any });
+      const contractor = await ContractorModel.findOne({ user: user._id as any });
       if (contractor) {
         Object.assign(contractor, payload.contractorData);
         await contractor.save();
       } else {
-        await Contractor.create({
+        await ContractorModel.create({
           ...payload.contractorData,
           user: user._id,
         } as any);

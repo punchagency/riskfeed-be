@@ -6,6 +6,7 @@ import { JwtAuthGuard } from '@/auth/jwt-auth.guard';
 import { FileFieldsInterceptor } from '@nestjs/platform-express';
 import fileUploadService from '@/integrations/fileUpload';
 import multer from 'multer';
+import type AuthenticatedRequest from '@/auth/auth-user.interface';
 
 
 @Controller('properties')
@@ -16,7 +17,7 @@ export class PropertiesController {
     @Post()
     @UseInterceptors(FileFieldsInterceptor([{ name: 'propertyImages', maxCount: 10 }], fileUploadService.getMulterOptions()))
     async create(
-        @Req() req: any,
+        @Req() req: AuthenticatedRequest,
         @Body() createPropertyDto: CreatePropertyDto,
         @UploadedFiles() files: { propertyImages?: multer[] }
     ) {
@@ -25,18 +26,19 @@ export class PropertiesController {
     }
 
     @Get('analytics')
-    async getAnalytics(@Req() req: any) {
+    async getAnalytics(@Req() req: AuthenticatedRequest) {
         return this.propertiesService.getAnalytics(req.user._id.toString(), req.user.role);
     }
 
     @Get()
     findAll(
-        @Req() req: any,
+        @Req() req: AuthenticatedRequest,
         @Query('page') page?: string,
         @Query('limit') limit?: string,
         @Query('search') search?: string,
         @Query('status') status?: string,
-        @Query('propertyType') propertyType?: string
+        @Query('propertyType') propertyType?: string,
+        @Query('lite') lite?: boolean
     ) {
         return this.propertiesService.findAll({
             userId: req.user._id.toString(),
@@ -45,19 +47,20 @@ export class PropertiesController {
             limit: limit ? parseInt(limit) : undefined,
             search,
             status,
-            propertyType
+            propertyType,
+            lite
         });
     }
 
     @Get(':id')
-    findOne(@Req() req: any, @Param('id') id: string) {
+    findOne(@Req() req: AuthenticatedRequest, @Param('id') id: string) {
         return this.propertiesService.findOne(id, req.user._id.toString(), req.user.role);
     }
 
     @Patch(':id')
     @UseInterceptors(FileFieldsInterceptor([{ name: 'propertyImages', maxCount: 10 }], fileUploadService.getMulterOptions()))
     update(
-        @Req() req: any,
+        @Req() req: AuthenticatedRequest,
         @Param('id') id: string,
         @Body() updatePropertyDto: UpdatePropertyDto,
         @UploadedFiles() files: { propertyImages?: multer[] }
@@ -67,7 +70,7 @@ export class PropertiesController {
     }
 
     @Delete(':id')
-    remove(@Req() req: any, @Param('id') id: string) {
+    remove(@Req() req: AuthenticatedRequest, @Param('id') id: string) {
         return this.propertiesService.remove(id, req.user._id.toString(), req.user.role);
     }
 }

@@ -1,26 +1,9 @@
-import { Schema, model, Document } from "mongoose";
+import { Schema, model, Document, Types } from "mongoose";
 
 export const PROJECT_STATUSES = ['draft', 'published', 'in_progress', 'completed', 'cancelled',] as const;
 export const PROJECT_MILESTONES_STATUSES = ['pending', 'in_progress', 'completed', 'cancelled',] as const;
 export const PROJECT_RISK_LEVELS = ['low', 'medium', 'high'] as const;
-
-export interface IProjectPropertySnapshot {
-    type: string;
-    name?: string;
-    address: {
-        street: string;
-        zipcode: string;
-        city: string;
-        state: string;
-        country: string;
-    };
-    ownershipType?: string;
-    sizeSqFt?: number;
-    ownerName?: string;
-    images?: string[];
-    documents?: string[];
-}
-
+export const PROJECT_TYPES = ['kitchen_remodeling',  'bathroom_remodeling',  'roofing',  'flooring',  'painting',  'electrical',  'plumbing',  'hvac',  'landscaping',  'deck_patio',  'basement_finishing',  'windows_doors',] as const;
 export interface IProjectMilestone {
     name: string;
     percentage: number;
@@ -41,7 +24,8 @@ export interface IProject extends Document {
     homeowner: Schema.Types.ObjectId;
     title: string;
     description: string;
-    property: IProjectPropertySnapshot;
+    projectType: typeof PROJECT_TYPES[number];
+    property: Types.ObjectId;
     minBudget: number;
     maxBudget: number;
     durationDays?: number;
@@ -58,27 +42,10 @@ export interface IProject extends Document {
     matchEvaluations?: IProjectMatchEvaluation[];
     matchPercentage?: number;
     riskFactor?: number;
+    projectImages?: string[];
+    projectDocuments?: string[];
 }
 
-const ProjectPropertySnapshotSchema = new Schema<IProjectPropertySnapshot>(
-    {
-        type: { type: String, required: true },
-        name: { type: String },
-        address: {
-            street: { type: String, required: true },
-            zipcode: { type: String, required: true },
-            city: { type: String, required: true },
-            state: { type: String, required: true },
-            country: { type: String, required: true },
-        },
-        ownershipType: { type: String },
-        sizeSqFt: { type: Number },
-        ownerName: { type: String },
-        images: { type: [String], default: [] },
-        documents: { type: [String], default: [] },
-    },
-    { _id: false }
-);
 
 const ProjectMilestoneSchema = new Schema<IProjectMilestone>(
     {
@@ -111,7 +78,8 @@ const ProjectSchema = new Schema<IProject>(
         homeowner: { type: Schema.Types.ObjectId, ref: 'User', required: true, index: true },
         title: { type: String, required: true },
         description: { type: String, required: true },
-        property: { type: ProjectPropertySnapshotSchema, required: true },
+        projectType: { type: String, enum: PROJECT_TYPES, required: true },
+        property: { type: Types.ObjectId, ref: 'Properties', required: true },
         minBudget: { type: Number, required: true },
         maxBudget: { type: Number, required: true },
         durationDays: { type: Number },
@@ -128,12 +96,13 @@ const ProjectSchema = new Schema<IProject>(
         matchEvaluations: { type: [ProjectMatchEvaluationSchema], default: [] },
         matchPercentage: { type: Number },
         riskFactor: { type: Number },
+        projectDocuments: { type: [String], default: [] },
+        projectImages: { type: [String], default: [] },
     },
     { timestamps: true }
 );
 
 ProjectSchema.index({ status: 1, minBudget: 1, maxBudget: 1 });
-ProjectSchema.index({ title: 'text', 'property.type': 'text', 'property.ownerName': 'text' });
 ProjectSchema.index({ selectedContractor: 1 });
 
 export default model<IProject>('Project', ProjectSchema);

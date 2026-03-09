@@ -1,5 +1,5 @@
 import { USER_STATUSES, ROLES, PROPERTY_TYPES, OWNERSHIP_TYPES, HEARD_ABOUT_SOURCES } from '../../models/user.model';
-import { CONTRACTOR_SERVICES, TEAM_SIZE_BUCKETS } from '../../models/contractor.model';
+import { TEAM_SIZE_BUCKETS } from '../../models/contractor.model';
 import {
   IsEmail,
   IsOptional,
@@ -12,6 +12,7 @@ import {
   IsDate,
 } from 'class-validator';
 import { Type } from 'class-transformer';
+import { PROJECT_TYPES } from '@/models/project.model';
 
 class UpdateAddressDto {
   @IsOptional()
@@ -145,8 +146,8 @@ class UpdateContractorDataDto {
 
   @IsOptional()
   @IsArray()
-  @IsEnum(CONTRACTOR_SERVICES, { each: true })
-  services?: typeof CONTRACTOR_SERVICES[number][];
+  @IsEnum(PROJECT_TYPES, { each: true })
+  services?: typeof PROJECT_TYPES[number][];
 
   @IsOptional()
   @IsArray()

@@ -4,6 +4,7 @@ import { RegisterUserDto } from './dto/register-user.dto';
 import { ActivateAccountDto, ChangePasswordDto, ForgotPasswordDto, LoginDto, RefreshTokenDto, ResendActivationCodeDto, ResendResetPasswordCodeDto, ResetPasswordDto, ValidateTokenDto } from './dto/auth-requests.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { UpdateProfileDto } from './dto/update-profile.dto';
+import type AuthenticatedRequest from '@/auth/auth-user.interface';
 
 @Controller('user')
 export class UserController {
@@ -36,26 +37,26 @@ export class UserController {
 
   @Post('logout')
   @UseGuards(JwtAuthGuard)
-  logout(@Req() req: any) {
-    return this.userService.logout(req.user.id);
+  logout(@Req() req: AuthenticatedRequest) {
+    return this.userService.logout(req.user._id);
   }
 
   @Post('change-password')
   @UseGuards(JwtAuthGuard)
-  changePassword(@Req() req: any, @Body() payload: ChangePasswordDto) {
-    return this.userService.changePassword(req.user.id, payload);
+  changePassword(@Req() req: AuthenticatedRequest, @Body() payload: ChangePasswordDto) {
+    return this.userService.changePassword(req.user._id, payload);
   }
 
   @Get('profile')
   @UseGuards(JwtAuthGuard)
-  getProfile(@Req() req: any) {
-    return this.userService.getProfile(req.user.id);
+  async getProfile(@Req() req: AuthenticatedRequest) {
+    return await this.userService.getProfile(req?.user?._id);
   }
 
   @Patch('profile')
   @UseGuards(JwtAuthGuard)
-  updateProfile(@Req() req: any, @Body() payload: UpdateProfileDto) {
-    return this.userService.updateProfile(req.user.id, payload);
+  updateProfile(@Req() req: AuthenticatedRequest, @Body() payload: UpdateProfileDto) {
+    return this.userService.updateProfile(req?.user?._id, payload);
   }
 
   @Post('activate-account')

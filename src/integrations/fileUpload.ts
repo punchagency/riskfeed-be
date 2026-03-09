@@ -48,7 +48,12 @@ class FileUploadService {
             allowedMimeTypes: ['image/jpeg', 'image/png', 'image/jpg', 'image/webp', 'image/heic'],
             maxCount: 10
         },
-        propertyDocuments: {
+        projectImages: {
+            maxFileSize: 25 * 1024 * 1024, // 25MB
+            allowedMimeTypes: ['image/jpeg', 'image/png', 'image/jpg', 'image/webp', 'image/heic'],
+            maxCount: 10
+        },
+        projectDocuments: {
             maxFileSize: 25 * 1024 * 1024, // 25MB
             allowedMimeTypes: ['image/jpeg', 'image/png', 'image/jpg', 'image/webp', 'image/heic', 'application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'image/jpeg', 'image/png', 'image/jpg'],
             maxCount: 10
@@ -196,7 +201,8 @@ export const profilePictureUploadMiddleware = fileUploadService.createUploadMidd
 ]);
 export const projectFilesUploadMiddleware = fileUploadService.createUploadMiddleware([
     { name: 'propertyImages', maxCount: 10 },
-    { name: 'propertyDocuments', maxCount: 10 },
+    { name: 'projectImages', maxCount: 10 },
+    { name: 'projectDocuments', maxCount: 10 },
 ]);
 
 export { FileUploadService, type IUploadedFile, type IFileUploadResult };

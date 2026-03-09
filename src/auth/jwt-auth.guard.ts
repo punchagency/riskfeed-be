@@ -18,7 +18,7 @@ export class JwtAuthGuard implements CanActivate {
 
     try {
       const decoded = jwt.verify(token, CONFIG.ACCESS_SECRET) as JwtPayload;
-      const user = await User.findById(decoded.userId).select('-password');
+      const user = await User.findById(decoded.userId).select('-password -refreshToken -activationCode -activationCodeExpires -resetPasswordCode -resetPasswordCodeExpires -address -notificationPreferences -heardAboutRiskfeed -properties -ownershipType');
       if (!user) {
         throw new UnauthorizedException('User not found');
       }

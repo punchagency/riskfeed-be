@@ -15,7 +15,7 @@
  *             required:
  *               - title
  *               - description
- *               - property
+ *               - propertyId
  *               - minBudget
  *               - maxBudget
  *             properties:
@@ -23,9 +23,9 @@
  *                 type: string
  *               description:
  *                 type: string
- *               property:
+ *               propertyId:
  *                 type: string
- *                 description: JSON string of property object
+ *                 description: ID of the selected property
  *               minBudget:
  *                 type: number
  *               maxBudget:
@@ -41,16 +41,13 @@
  *               status:
  *                 type: string
  *                 enum: [draft, published, in_progress, completed, cancelled]
- *               milestones:
- *                 type: string
- *                 description: JSON string array of milestones
- *               propertyImages:
+ *               projectImages:
  *                 type: array
  *                 items:
  *                   type: string
  *                   format: binary
  *                 maxItems: 10
- *               propertyDocuments:
+ *               projectDocuments:
  *                 type: array
  *                 items:
  *                   type: string
@@ -211,9 +208,9 @@
  *                 type: string
  *               description:
  *                 type: string
- *               property:
+ *               propertyId:
  *                 type: string
- *                 description: JSON string of property object
+ *                 description: ID of the selected property
  *               minBudget:
  *                 type: number
  *               maxBudget:
@@ -229,16 +226,13 @@
  *               status:
  *                 type: string
  *                 enum: [draft, published, in_progress, completed, cancelled]
- *               milestones:
- *                 type: string
- *                 description: JSON string array of milestones
- *               propertyImages:
+ *               projectImages:
  *                 type: array
  *                 items:
  *                   type: string
  *                   format: binary
  *                 maxItems: 10
- *               propertyDocuments:
+ *               projectDocuments:
  *                 type: array
  *                 items:
  *                   type: string
@@ -264,6 +258,55 @@
  *         description: Unauthorized
  *       403:
  *         description: Forbidden - Can only update own projects or projects not in draft/published status
+ *       404:
+ *         description: Project not found
+ */
+
+/**
+ * @swagger
+ * /api/v1/projects/{id}/suggest-contractors:
+ *   get:
+ *     summary: Get contractor suggestions for a project
+ *     tags: [Projects]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Contractors suggested successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 data:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                     properties:
+ *                       contractor:
+ *                         type: object
+ *                       matchPercentage:
+ *                         type: number
+ *                         description: Match percentage based on services, location, verification, ratings
+ *                       riskFactor:
+ *                         type: number
+ *                         description: Calculated risk factor score
+ *                 message:
+ *                   type: string
+ *       400:
+ *         description: Bad request (invalid ID or fetching failure)
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Forbidden (user can only view suggestions for their own projects)
  *       404:
  *         description: Project not found
  */

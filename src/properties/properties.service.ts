@@ -32,39 +32,68 @@ export class PropertiesService {
         return { success: true, data: property, message: 'Property created successfully' };
     }
 
-    async findAll({ userId, userRole, page = 1, limit = CONFIG.settings.PAGINATION_LIMIT, search, status, propertyType }: { userId: string, userRole: string, page?: number, limit?: number, search?: string, status?: string, propertyType?: string }) {
-        const skip = (page - 1) * limit;
+    async findAll({ userId, userRole, page = 1, limit, search, status, propertyType, lite }: { userId: string, userRole: string, page?: number, limit?: number, search?: string, status?: string, propertyType?: string, lite?: boolean }) {
         const query: any = userRole === 'admin' ? {} : { user: userId };
 
         if (search) query.$text = { $search: search };
         if (status) query.status = status;
         if (propertyType) query.propertyType = propertyType;
 
-        const [error, result] = await catchError(
-            Promise.all([
-                PropertiesModel.find(query).skip(skip).limit(limit).populate('projects').lean(),
-                PropertiesModel.countDocuments(query)
-            ])
-        );
+        const dbQuery = PropertiesModel.find(query);
 
-        if (error) {
-            logError({ message: 'Failed to fetch properties', source: 'PropertiesService.findAll', error });
-            throw new BadRequestException('Failed to fetch properties');
+        if (String(lite) !== 'true' && lite !== true) {
+            dbQuery.populate('projects');
         }
 
-        const [items, total] = result;
-        return {
-            success: true,
-            data: {
-                items,
-                pagination: {
-                    total,
-                    page,
-                    pages: Math.ceil(total / limit),
-                    limit
-                }
+        if (limit) {
+            const skip = (page - 1) * limit;
+
+            const [error, result] = await catchError(
+                Promise.all([
+                    dbQuery.skip(skip).limit(limit).lean(),
+                    PropertiesModel.countDocuments(query)
+                ])
+            );
+
+            if (error) {
+                logError({ message: 'Failed to fetch properties', source: 'PropertiesService.findAll', error });
+                throw new BadRequestException('Failed to fetch properties');
             }
-        };
+
+            const [items, total] = result;
+            return {
+                success: true,
+                data: {
+                    items,
+                    pagination: {
+                        total,
+                        page,
+                        pages: Math.ceil(total / limit),
+                        limit
+                    }
+                }
+            };
+        } else {
+            const [error, items] = await catchError(dbQuery.lean());
+
+            if (error) {
+                logError({ message: 'Failed to fetch properties', source: 'PropertiesService.findAll', error });
+                throw new BadRequestException('Failed to fetch properties');
+            }
+
+            return {
+                success: true,
+                data: {
+                    items,
+                    pagination: {
+                        total: items?.length || 0,
+                        page: 1,
+                        pages: 1,
+                        limit: items?.length || 0
+                    }
+                }
+            };
+        }
     }
 
     async findOne(propertyId: string, userId: string, userRole: string) {

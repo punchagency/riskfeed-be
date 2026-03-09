@@ -1,6 +1,7 @@
 import { Schema, model, Document, Types } from "mongoose";
+import { PROJECT_TYPES } from "./project.model";
 
-export const CONTRACTOR_SERVICES = ['kitchen_remodeling',  'bathroom_remodeling',  'roofing',  'flooring',  'painting',  'electrical',  'plumbing',  'hvac',  'landscaping',  'deck_patio',  'basement_finishing',  'windows_doors',] as const;
+
 export const VERIFICATION_STATUSES = ['not_started', 'in_progress', 'verified', 'failed',] as const;
 export const TEAM_SIZE_BUCKETS = ['solo', 'one_to_five', 'six_to_ten', 'eleven_to_twenty-five', 'twenty-five_to_fifty', 'fifty_plus'] as const;
 export const CONTRACTOR_STATUSES = ['pending', 'active', 'suspended', 'deleted'] as const;
@@ -72,7 +73,7 @@ export interface IContractor extends Document {
         state: string;
         country: string;
     };
-    services: typeof CONTRACTOR_SERVICES[number][];
+    services: typeof PROJECT_TYPES[number][];
     serviceAreas: string[];
     teamSize?: typeof TEAM_SIZE_BUCKETS[number];
     isBonded?: boolean;
@@ -169,7 +170,7 @@ const ContractorSchema = new Schema<IContractor>(
             state: { type: String, required: true },
             country: { type: String, required: true },
         },
-        services: { type: [String], enum: CONTRACTOR_SERVICES, default: [] },
+        services: { type: [String], enum: PROJECT_TYPES, default: [] },
         serviceAreas: { type: [String], default: [] },
         teamSize: { type: String, enum: TEAM_SIZE_BUCKETS },
         isBonded: { type: Boolean, default: false },

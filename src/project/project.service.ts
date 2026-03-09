@@ -6,26 +6,27 @@ import CONFIG from '@/config/config';
 import catchError from '@/utils/catchError';
 import { logError, logInfo } from '@/utils/SystemLogs';
 import Validate from '@/utils/Validate';
+import Contractor from '@/models/contractor.model';
 
 @Injectable()
 export class ProjectService {
-  async create(userId: string, createProjectDto: CreateProjectDto, files?: { propertyImages?: any[]; propertyDocuments?: any[] }) {
+  async create(userId: string, createProjectDto: CreateProjectDto, files?: { projectImages?: any[]; projectDocuments?: any[] }) {
     if (createProjectDto.minBudget > createProjectDto.maxBudget) {
       throw new BadRequestException('minBudget cannot exceed maxBudget');
     }
 
-    const propertyImages = files?.propertyImages?.map(file => file.location) || [];
-    const propertyDocuments = files?.propertyDocuments?.map(file => file.location) || [];
+    const { propertyId, ...restDto } = createProjectDto;
+    const projectImages = files?.projectImages?.map(file => file.location) || [];
+    const projectDocuments = files?.projectDocuments?.map(file => file.location) || [];
 
     const [error, project] = await catchError(
       Project.create({
-        ...createProjectDto,
+        ...restDto,
         homeowner: userId as any,
-        property: {
-          ...createProjectDto.property,
-          images: propertyImages,
-          documents: propertyDocuments,
-        },
+        property: propertyId,
+        status: "published",
+        projectImages,
+        projectDocuments,
       })
     );
 
@@ -38,7 +39,6 @@ export class ProjectService {
 
     return { success: true, data: project, message: 'Project created successfully' };
   }
-
   async findAll({userId, userRole, page = 1, limit = CONFIG.settings.PAGINATION_LIMIT, search, status, riskLevel, minBudget, maxBudget }:{userId: string, userRole: string, page: number, limit?: number, search?: string, status?: string, riskLevel?: string, minBudget?: number, maxBudget?: number}) {
     const query: any = {};
 
@@ -52,8 +52,6 @@ export class ProjectService {
     if (search) {
       query.$or = [
         { title: { $regex: search, $options: 'i' } },
-        { 'property.type': { $regex: search, $options: 'i' } },
-        { 'property.ownerName': { $regex: search, $options: 'i' } },
       ];
     }
     
@@ -63,7 +61,7 @@ export class ProjectService {
     const skip = (page - 1) * limit;
 
     const [projects, total] = await Promise.all([
-      Project.find(query).populate('selectedContractor', 'businessName').skip(skip).limit(limit).lean(),
+      Project.find(query).populate('selectedContractor', 'businessName').populate('property').skip(skip).limit(limit).lean(),
       Project.countDocuments(query),
     ]);
 
@@ -80,8 +78,7 @@ export class ProjectService {
       },
     };
   }
-
-  async findOne(projectId: string, userId: string, userRole: string) {
+  async findOne(projectId: string) {
     if (!Validate.mongoId(projectId)) {
       throw new BadRequestException('Invalid project ID');
     }
@@ -91,6 +88,7 @@ export class ProjectService {
         .populate('homeowner', 'firstName lastName email')
         .populate('selectedContractor')
         .populate('acceptedProposal')
+        .populate('property')
         .lean()
     );
 
@@ -105,8 +103,7 @@ export class ProjectService {
 
     return { success: true, data: project };
   }
-
-  async update(projectId: string, userId: string, updateProjectDto: UpdateProjectDto, files?: { propertyImages?: any[]; propertyDocuments?: any[] }) {
+  async update(projectId: string, userId: string, updateProjectDto: UpdateProjectDto, files?: { projectImages?: any[]; projectDocuments?: any[] }) {
     if (!Validate.mongoId(projectId)) {
       throw new BadRequestException('Invalid project ID');
     }
@@ -134,21 +131,23 @@ export class ProjectService {
       throw new ForbiddenException('Can only update projects with draft or published status');
     }
 
-    const propertyImages = files?.propertyImages?.map(file => file.location) || [];
-    const propertyDocuments = files?.propertyDocuments?.map(file => file.location) || [];
+    const { propertyId, ...restUpdateData } = updateProjectDto;
 
-    if (updateProjectDto.property) {
-      const existingImages = project.property?.images || [];
-      const existingDocuments = project.property?.documents || [];
-
-      updateProjectDto.property = {
-        ...updateProjectDto.property,
-        images: [...existingImages, ...propertyImages],
-        documents: [...existingDocuments, ...propertyDocuments],
-      } as any;
+    if (propertyId) {
+      project.property = propertyId as any;
     }
 
-    Object.assign(project, updateProjectDto);
+    Object.assign(project, restUpdateData);
+
+    const projectImages = files?.projectImages?.map(file => file.location) || [];
+    const projectDocuments = files?.projectDocuments?.map(file => file.location) || [];
+
+    if (projectImages.length) {
+      project.projectImages = [...(project.projectImages || []), ...projectImages];
+    }
+    if (projectDocuments.length) {
+      project.projectDocuments = [...(project.projectDocuments || []), ...projectDocuments];
+    }
 
     const [saveError, updatedProject] = await catchError(project.save());
 
@@ -160,5 +159,120 @@ export class ProjectService {
     logInfo({ message: 'Project updated', source: 'ProjectService.update', additionalData: { projectId, userId } });
 
     return { success: true, data: updatedProject, message: 'Project updated successfully' };
+  }
+  async suggestContractorForProject(projectId: string, userId: string) {
+    if (!Validate.mongoId(projectId)) {
+      throw new BadRequestException('Invalid project ID');
+    }
+
+    const [error, project] = await catchError(
+      Project.findById(projectId).populate('property').lean()
+    );
+
+    if (error) {
+      logError({ message: 'Failed to fetch project', source: 'ProjectService.suggestContractorForProject', error });
+      throw new BadRequestException('Failed to fetch project');
+    }
+
+    if (!project) {
+      throw new NotFoundException('Project not found');
+    }
+
+    if (project.homeowner.toString() !== userId.toString()) {
+      throw new ForbiddenException('You can only view suggestions for your own projects');
+    }
+
+    const projectType = project.projectType;
+    const property = project.property as any;
+    const projectCity = property?.address?.city;
+    const projectState = property?.address?.state;
+
+    // Find contractors that provide the required service
+    const [contractorsError, contractors] = await catchError(
+      Contractor.find({ services: { $in: [projectType] } }).populate('user').lean()
+    );
+
+    if (contractorsError) {
+      logError({ message: 'Failed to fetch contractors', source: 'ProjectService.suggestContractorForProject', error: contractorsError });
+      throw new BadRequestException('Failed to fetch contractors');
+    }
+
+    const evaluatedContractors = contractors.map(contractor => {
+      let matchPercentage = 50; // Base percentage for matching the service
+      let riskFactor = 100; // Base risk starts at highest
+
+      // Evaluate Match Percentage
+      if (projectCity && contractor.serviceAreas?.includes(projectCity)) {
+        matchPercentage += 20;
+      } else if (projectState && contractor.serviceAreas?.includes(projectState)) {
+        matchPercentage += 10;
+      }
+
+      if (contractor.verification?.businessVerificationStatus === 'verified') {
+        matchPercentage += 15;
+      }
+
+      const averageRating = contractor.ratings?.averageRatings || 0;
+      if (averageRating >= 4) {
+        matchPercentage += 15;
+      } // If less than 4, don't add more percentage
+
+      // Cap at 100%
+      matchPercentage = Math.min(matchPercentage, 100);
+
+      // Evaluate Risk Factor
+      const isFullyVerified = 
+        contractor.verification?.businessVerificationStatus === 'verified' &&
+        contractor.verification?.licenseValidationStatus === 'verified' &&
+        contractor.verification?.insuranceCheckStatus === 'verified' &&
+        contractor.verification?.backgroundScreeningStatus === 'verified' &&
+        contractor.verification?.financialHealthStatus === 'verified';
+
+      if (isFullyVerified) riskFactor -= 40;
+      if (contractor.yearsInBusiness > 3) riskFactor -= 20;
+      if (contractor.isBonded) riskFactor -= 20;
+      
+      const now = new Date();
+      if (contractor.insurance?.expiryDate && new Date(contractor.insurance.expiryDate) > now) {
+        riskFactor -= 20;
+      }
+
+      // Floor at 0%
+      riskFactor = Math.max(riskFactor, 0);
+
+      return {
+        contractor: {
+          _id: contractor._id,
+          companyName: contractor.companyName,
+          businessName: contractor.businessName,
+          businessEmail: contractor.businessEmail,
+          businessPhone: contractor.businessPhone,
+          yearsInBusiness: contractor.yearsInBusiness,
+          ratings: contractor.ratings,
+          services: contractor.services,
+          serviceAreas: contractor.serviceAreas,
+          verification: contractor.verification,
+          insurance: contractor.insurance,
+        },
+        matchPercentage,
+        riskFactor,
+      };
+    });
+
+    // Sort by match percentage (desc) and then risk factor (asc)
+    evaluatedContractors.sort((a, b) => {
+      if (b.matchPercentage !== a.matchPercentage) {
+        return b.matchPercentage - a.matchPercentage;
+      }
+      return a.riskFactor - b.riskFactor;
+    });
+
+    logInfo({ message: 'Suggested contractors for project', source: 'ProjectService.suggestContractorForProject', additionalData: { projectId, userId, matchesCount: evaluatedContractors.length } });
+
+    return { 
+      success: true, 
+      data: evaluatedContractors, 
+      message: 'Contractors suggested successfully' 
+    };
   }
 }

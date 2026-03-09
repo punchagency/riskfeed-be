@@ -7,6 +7,7 @@ import { Roles } from '@/auth/roles.decorator';
 import { RolesGuard } from '@/auth/roles.guard';
 import { FileFieldsInterceptor } from '@nestjs/platform-express';
 import { fileUploadService } from '@/integrations/fileUpload';
+import type AuthenticatedRequest from '@/auth/auth-user.interface';
 
 @Controller('projects')
 @UseGuards(JwtAuthGuard)
@@ -17,17 +18,16 @@ export class ProjectController {
   @Roles('user')
   @UseGuards(RolesGuard)
   @UseInterceptors(FileFieldsInterceptor([
-    { name: 'propertyImages', maxCount: 10 },
-    { name: 'propertyDocuments', maxCount: 10 },
+    { name: 'projectImages', maxCount: 10 },
+    { name: 'projectDocuments', maxCount: 10 },
   ], fileUploadService.getMulterOptions()))
-
-  create(@Req() req, @Body() createProjectDto: CreateProjectDto, @UploadedFiles() files: { propertyImages?: any[]; propertyDocuments?: any[] }) {
+  create(@Req() req: AuthenticatedRequest, @Body() createProjectDto: CreateProjectDto, @UploadedFiles() files: { projectImages?: any[]; projectDocuments?: any[] }) {
     return this.projectService.create(req.user._id, createProjectDto, files);
   }
 
   @Get()
   findAll(
-    @Req() req,
+    @Req() req: AuthenticatedRequest,
     @Query('page') page?: string,
     @Query('search') search?: string,
     @Query('limit') limit?: string,
@@ -50,19 +50,27 @@ export class ProjectController {
   }
 
   @Get(':id')
-  findOne(@Param('id') id: string, @Req() req) {
-    return this.projectService.findOne(id, req.user._id, req.user.role);
+  findOne(@Param('id') id: string, @Req() req: AuthenticatedRequest) {
+    return this.projectService.findOne(id);
   }
 
   @Patch(':id')
   @Roles('user')
   @UseGuards(RolesGuard)
   @UseInterceptors(FileFieldsInterceptor([
-    { name: 'propertyImages', maxCount: 10 },
-    { name: 'propertyDocuments', maxCount: 10 },
+    { name: 'projectImages', maxCount: 10 },
+    { name: 'projectDocuments', maxCount: 10 },
   ], fileUploadService.getMulterOptions()))
 
-  update(@Param('id') id: string, @Req() req, @Body() updateProjectDto: UpdateProjectDto, @UploadedFiles() files: { propertyImages?: any[]; propertyDocuments?: any[] }) {
+  update(@Param('id') id: string, @Req() req: AuthenticatedRequest, @Body() updateProjectDto: UpdateProjectDto, @UploadedFiles() files: { projectImages?: any[]; projectDocuments?: any[] }) {
     return this.projectService.update(id, req.user._id, updateProjectDto, files);
+  }
+
+
+  @Get(':id/suggest-contractors')
+  @Roles('user')
+  @UseGuards(RolesGuard)
+  suggestContractorForProject(@Param('id') id: string, @Req() req: AuthenticatedRequest) {
+    return this.projectService.suggestContractorForProject(id, req.user._id);
   }
 }
