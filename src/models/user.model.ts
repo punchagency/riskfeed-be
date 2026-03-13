@@ -1,10 +1,11 @@
-import { Schema, model, Document } from "mongoose";
+import { Schema, model, Document, Types } from "mongoose";
 
 export const USER_STATUSES = ['pending', 'active', 'suspended'] as const;
 export const ROLES = ['admin', 'user', 'contractor'] as const;
 export const PROPERTY_TYPES = ['single_home', 'condo', 'multi_family', 'commercial'] as const;
 export const OWNERSHIP_TYPES = ['owner', 'renter', 'lessee'] as const;
 export const HEARD_ABOUT_SOURCES = ['online_search', 'google_search', 'friend_family_referral', 'contractor_referral', 'social_media', 'ad', 'other',] as const;
+export const ACCOUNT_ROLES = ['owner', 'member'] as const;
 
 export interface IUserAddress {
     street: string;
@@ -12,14 +13,6 @@ export interface IUserAddress {
     city: string;
     state: string;
     country: string;
-}
-
-export interface IUserProperty {
-    type: typeof PROPERTY_TYPES[number];
-    name?: string;
-    address: IUserAddress;
-    ownershipType?: typeof OWNERSHIP_TYPES[number];
-    notes?: string;
 }
 
 export interface IUser extends Document {
@@ -42,12 +35,12 @@ export interface IUser extends Document {
     password: string;
     status: typeof USER_STATUSES[number];
     role: typeof ROLES[number];
-    ownershipType?: typeof OWNERSHIP_TYPES[number];
-    properties?: IUserProperty[];
     heardAboutRiskfeed?: {
         source: typeof HEARD_ABOUT_SOURCES[number];
         otherDetails?: string;
     };
+    parentAccount?: Types.ObjectId;
+    accountRole: typeof ACCOUNT_ROLES[number];
 }
 
 const AddressSchema = new Schema<IUserAddress>(
@@ -61,25 +54,15 @@ const AddressSchema = new Schema<IUserAddress>(
     { _id: false }
 );
 
-const PropertySchema = new Schema<IUserProperty>(
-    {
-        type: { type: String, enum: PROPERTY_TYPES, required: true },
-        name: { type: String },
-        address: { type: AddressSchema, required: true },
-        ownershipType: { type: String, enum: OWNERSHIP_TYPES },
-        notes: { type: String },
-    },
-    { _id: true, timestamps: false }
-);
 
 const UserSchema = new Schema<IUser>(
     {
-        firstName: { type: String, required: true },
-        lastName: { type: String, required: true },
+        firstName: { type: String },
+        lastName: { type: String },
         profilePicture: { type: String },
         email: { type: String, required: true, unique: true },
-        phoneNumber: { type: String, required: true, unique: true },
-        address: { type: AddressSchema, required: true },
+        phoneNumber: { type: String, sparse: true, unique: true },
+        address: { type: AddressSchema },
         refreshToken: { type: String },
         activationCode: { type: String },
         activationCodeExpires: { type: Date },
@@ -90,15 +73,15 @@ const UserSchema = new Schema<IUser>(
             pushNotifications: { type: Boolean, default: true },
             marketingCommunications: { type: Boolean, default: true },
         },
-        password: { type: String, required: true },
+        password: { type: String },
         status: { type: String, enum: USER_STATUSES, default: 'pending' },
         role: { type: String, enum: ROLES, default: 'user', index: true },
-        ownershipType: { type: String, enum: OWNERSHIP_TYPES },
-        properties: { type: [PropertySchema], default: [] },
         heardAboutRiskfeed: {
             source: { type: String, enum: HEARD_ABOUT_SOURCES },
             otherDetails: { type: String },
         },
+        parentAccount: { type: Schema.Types.ObjectId, ref: 'User', index: true },
+        accountRole: { type: String, enum: ACCOUNT_ROLES, default: 'owner' },
     },
     {
         timestamps: true,

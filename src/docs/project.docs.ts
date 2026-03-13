@@ -375,3 +375,132 @@
  *       404:
  *         description: Project or contractor not found
  */
+
+/**
+ * @swagger
+ * /api/v1/projects/opportunities:
+ *   get:
+ *     summary: Get available project opportunities for contractors with risk match calculation
+ *     tags: [Projects]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *           default: 1
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           default: 30
+ *       - in: query
+ *         name: minMatchPercentage
+ *         schema:
+ *           type: number
+ *           minimum: 0
+ *           maximum: 100
+ *         description: Minimum match percentage filter
+ *       - in: query
+ *         name: maxMatchPercentage
+ *         schema:
+ *           type: number
+ *           minimum: 0
+ *           maximum: 100
+ *         description: Maximum match percentage filter
+ *       - in: query
+ *         name: propertyState
+ *         schema:
+ *           type: string
+ *         description: Filter by property state
+ *       - in: query
+ *         name: propertyType
+ *         schema:
+ *           type: string
+ *           enum: [single_family_home, townhouse, condominium, multi-family, investment_property, vacation_home, commercial_property, land/lot]
+ *         description: Filter by property type
+ *       - in: query
+ *         name: projectType
+ *         schema:
+ *           type: string
+ *           enum: [kitchen_remodeling, bathroom_remodeling, roofing, flooring, painting, electrical, plumbing, hvac, landscaping, deck_patio, basement_finishing, windows_doors]
+ *         description: Filter by project/service type
+ *     responses:
+ *       200:
+ *         description: Opportunities fetched successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     items:
+ *                       type: array
+ *                       items:
+ *                         type: object
+ *                         properties:
+ *                           _id:
+ *                             type: string
+ *                           title:
+ *                             type: string
+ *                           description:
+ *                             type: string
+ *                           projectType:
+ *                             type: string
+ *                           minBudget:
+ *                             type: number
+ *                           maxBudget:
+ *                             type: number
+ *                           status:
+ *                             type: string
+ *                           homeowner:
+ *                             type: object
+ *                             properties:
+ *                               _id:
+ *                                 type: string
+ *                               firstName:
+ *                                 type: string
+ *                               lastName:
+ *                                 type: string
+ *                               email:
+ *                                 type: string
+ *                               profilePicture:
+ *                                 type: string
+ *                           property:
+ *                             type: object
+ *                           matchPercentage:
+ *                             type: number
+ *                             description: Calculated match percentage based on contractor profile
+ *                           riskFactor:
+ *                             type: number
+ *                             description: Calculated risk factor for the contractor
+ *                           isInvited:
+ *                             type: boolean
+ *                             description: Indicates if contractor was invited to this project
+ *                     pagination:
+ *                       type: object
+ *                       properties:
+ *                         total:
+ *                           type: number
+ *                         page:
+ *                           type: number
+ *                         pages:
+ *                           type: number
+ *                         limit:
+ *                           type: number
+ *                 message:
+ *                   type: string
+ *       400:
+ *         description: Bad request
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Forbidden - Only contractors can access this endpoint
+ *       404:
+ *         description: Contractor profile not found
+ */

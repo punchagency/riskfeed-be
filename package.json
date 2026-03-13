@@ -44,7 +44,8 @@
     "stacktrace-js": "^2.0.2",
     "stripe": "^20.3.1",
     "swagger-jsdoc": "^6.2.8",
-    "swagger-ui-express": "^5.0.1"
+    "swagger-ui-express": "^5.0.1",
+    "world-countries": "^5.1.0"
   },
   "devDependencies": {
     "@nestjs/cli": "^11.0.0",

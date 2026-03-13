@@ -2,6 +2,7 @@ import { Controller, Get, Post, Body, Patch, Param, Delete, UseGuards, Req, Quer
 import { ProjectService } from './project.service';
 import { CreateProjectDto } from './dto/create-project.dto';
 import { UpdateProjectDto } from './dto/update-project.dto';
+import { GetOpportunitiesDto } from './dto/get-opportunities.dto';
 import { JwtAuthGuard } from '@/auth/jwt-auth.guard';
 import { Roles } from '@/auth/roles.decorator';
 import { RolesGuard } from '@/auth/roles.guard';
@@ -51,6 +52,13 @@ export class ProjectController {
     });
   }
 
+  @Get('opportunities')
+  @Roles('contractor')
+  @UseGuards(RolesGuard)
+  opportunities(@Req() req: AuthenticatedRequest, @Query() filters: GetOpportunitiesDto) {
+    return this.projectService.getOpportunities(req.user._id, filters);
+  }
+
   @Get(':id')
   findOne(@Param('id') id: string, @Req() req: AuthenticatedRequest) {
     return this.projectService.findOne(id);
@@ -80,6 +88,12 @@ export class ProjectController {
   @Roles('user')
   @UseGuards(RolesGuard)
   inviteContractor(@Param('id') id: string, @Req() req: AuthenticatedRequest, @Body() inviteContractorDto: InviteContractorDto) {
-    return this.projectService.inviteToBid(id, req.user._id, inviteContractorDto.contractorId, inviteContractorDto.message);
+    return this.projectService.inviteToBid({
+      projectId: id,
+      userId: req.user._id,
+      contractorId: inviteContractorDto.contractorId,
+      message: inviteContractorDto.message,
+      contractorEmail: inviteContractorDto.contractorEmail
+    });
   }
 }

@@ -7,7 +7,6 @@ import CONFIG from '@/config/config';
 
 @Injectable()
 export class ContractorService {
-
   async findAll(filterDto: GetContractorsFilterDto) {
     const { search, speciality, location, minRating, maxRiskScore, page = 1, limit = CONFIG.settings.PAGINATION_LIMIT } = filterDto;
     const skip = (page - 1) * limit;
@@ -27,8 +26,8 @@ export class ContractorService {
 
     if (location) {
       query.$or = [
-        { 'businessAddress.city': { $regex: location, $options: 'i' } },
-        { 'businessAddress.state': { $regex: location, $options: 'i' } },
+        { 'businessAddresses.city': { $regex: location, $options: 'i' } },
+        { 'businessAddresses.state': { $regex: location, $options: 'i' } },
         { serviceAreas: { $regex: location, $options: 'i' } },
       ];
     }
@@ -69,7 +68,6 @@ export class ContractorService {
       },
     };
   }
-
   async findOne(id: string) {
     const [error, contractor] = await catchError(Contractor.findById(id).lean());
 

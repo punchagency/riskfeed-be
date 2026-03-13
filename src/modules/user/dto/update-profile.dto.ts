@@ -1,5 +1,5 @@
-import { USER_STATUSES, ROLES, PROPERTY_TYPES, OWNERSHIP_TYPES, HEARD_ABOUT_SOURCES } from '../../../models/user.model';
-import { TEAM_SIZE_BUCKETS } from '../../../models/contractor.model';
+import { USER_STATUSES, ROLES, HEARD_ABOUT_SOURCES } from '../../../models/user.model';
+import { TEAM_SIZE_BUCKETS, CORPORATION_TYPES } from '../../../models/contractor.model';
 import {
   IsEmail,
   IsOptional,
@@ -10,6 +10,8 @@ import {
   IsArray,
   IsNumber,
   IsDate,
+  Min,
+  Max,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 import { PROJECT_TYPES } from '@/models/project.model';
@@ -50,29 +52,6 @@ class UpdateNotificationPreferencesDto {
   marketingCommunications?: boolean;
 }
 
-class UpdatePropertyDto {
-  @IsOptional()
-  @IsEnum(PROPERTY_TYPES)
-  type?: typeof PROPERTY_TYPES[number];
-
-  @IsOptional()
-  @IsString()
-  name?: string;
-
-  @IsOptional()
-  @ValidateNested()
-  @Type(() => UpdateAddressDto)
-  address?: UpdateAddressDto;
-
-  @IsOptional()
-  @IsEnum(OWNERSHIP_TYPES)
-  ownershipType?: typeof OWNERSHIP_TYPES[number];
-
-  @IsOptional()
-  @IsString()
-  notes?: string;
-}
-
 class UpdateHeardAboutDto {
   @IsOptional()
   @IsEnum(HEARD_ABOUT_SOURCES)
@@ -102,6 +81,20 @@ class UpdateInsuranceDto {
   expiryDate?: Date;
 }
 
+class UpdateLicenseDto {
+  @IsOptional()
+  @IsString()
+  number?: string;
+
+  @IsOptional()
+  @IsString()
+  description?: string;
+
+  @IsOptional()
+  @IsString()
+  state?: string;
+}
+
 class UpdateContractorDataDto {
   @IsOptional()
   @IsString()
@@ -113,19 +106,28 @@ class UpdateContractorDataDto {
 
   @IsOptional()
   @IsString()
-  licenseNumber?: string;
+  companyLogo?: string;
+
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => UpdateLicenseDto)
+  licenses?: UpdateLicenseDto[];
+
+  @IsOptional()
+  @IsEnum(CORPORATION_TYPES)
+  corporationType?: typeof CORPORATION_TYPES[number];
 
   @IsOptional()
   @IsNumber()
-  yearsInBusiness?: number;
+  @Type(() => Number)
+  @Min(1800)
+  @Max(new Date().getFullYear())
+  yearEstablished?: number;
 
   @IsOptional()
   @IsString()
   taxId?: string;
-
-  @IsOptional()
-  @IsString()
-  ownerName?: string;
 
   @IsOptional()
   @IsString()
@@ -140,9 +142,10 @@ class UpdateContractorDataDto {
   businessWebsite?: string;
 
   @IsOptional()
-  @ValidateNested()
+  @IsArray()
+  @ValidateNested({ each: true })
   @Type(() => UpdateAddressDto)
-  businessAddress?: UpdateAddressDto;
+  businessAddresses?: UpdateAddressDto[];
 
   @IsOptional()
   @IsArray()
@@ -203,17 +206,6 @@ export class UpdateProfileDto {
   @IsEnum(USER_STATUSES)
   status?: (typeof USER_STATUSES)[number];
 
-  // Homeowner fields
-  @IsOptional()
-  @IsEnum(OWNERSHIP_TYPES)
-  ownershipType?: typeof OWNERSHIP_TYPES[number];
-
-  @IsOptional()
-  @IsArray()
-  @ValidateNested({ each: true })
-  @Type(() => UpdatePropertyDto)
-  properties?: UpdatePropertyDto[];
-
   @IsOptional()
   @ValidateNested()
   @Type(() => UpdateHeardAboutDto)
@@ -225,4 +217,3 @@ export class UpdateProfileDto {
   @Type(() => UpdateContractorDataDto)
   contractorData?: UpdateContractorDataDto;
 }
-

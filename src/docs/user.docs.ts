@@ -64,13 +64,6 @@
  *                     type: boolean
  *                   marketingCommunications:
  *                     type: boolean
- *               ownershipType:
- *                 type: string
- *                 enum: [owner, renter, lessee]
- *               properties:
- *                 type: array
- *                 items:
- *                   type: object
  *               heardAboutRiskfeed:
  *                 type: object
  *                 properties:
@@ -156,27 +149,6 @@
  *                     type: string
  *                   country:
  *                     type: string
- *               ownershipType:
- *                 type: string
- *                 enum: [owner, renter, lessee]
- *                 description: For homeowners
- *               properties:
- *                 type: array
- *                 description: For homeowners
- *                 items:
- *                   type: object
- *                   properties:
- *                     type:
- *                       type: string
- *                       enum: [single_home, condo, multi_family, commercial]
- *                     name:
- *                       type: string
- *                     address:
- *                       type: object
- *                     ownershipType:
- *                       type: string
- *                     notes:
- *                       type: string
  *               heardAboutRiskfeed:
  *                 type: object
  *                 description: For homeowners
@@ -196,11 +168,21 @@
  *                     type: string
  *                   licenseNumber:
  *                     type: string
- *                   yearsInBusiness:
+ *                     deprecated: true
+ *                   licenses:
+ *                     type: array
+ *                     items:
+ *                       type: object
+ *                       properties:
+ *                         number: { type: string }
+ *                         description: { type: string }
+ *                         state: { type: string }
+ *                   corporationType:
+ *                     type: string
+ *                     enum: [sole_proprietorship, partnership, limited_liability_company, corporation, other]
+ *                   yearEstablished:
  *                     type: number
  *                   taxId:
- *                     type: string
- *                   ownerName:
  *                     type: string
  *                   businessEmail:
  *                     type: string
@@ -208,8 +190,16 @@
  *                     type: string
  *                   businessWebsite:
  *                     type: string
- *                   businessAddress:
- *                     type: object
+ *                   businessAddresses:
+ *                     type: array
+ *                     items:
+ *                       type: object
+ *                       properties:
+ *                         street: { type: string }
+ *                         zipcode: { type: string }
+ *                         city: { type: string }
+ *                         state: { type: string }
+ *                         country: { type: string }
  *                   services:
  *                     type: array
  *                     items:
@@ -249,6 +239,53 @@
  *                 user:
  *                   type: object
  *                   description: Newly created user (without sensitive fields)
+ *
+ * /api/v1/user/linked-accounts:
+ *   post:
+ *     summary: Add a linked user to current account
+ *     tags: [User]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [firstName, lastName, email, phoneNumber, password]
+ *             properties:
+ *               firstName: { type: string }
+ *               lastName: { type: string }
+ *               email: { type: string }
+ *               phoneNumber: { type: string }
+ *               password: { type: string }
+ *               accountRole: { type: string, enum: [owner, member] }
+ *     responses:
+ *       201:
+ *         description: Linked user created
+ *   get:
+ *     summary: Get all linked users for current account
+ *     tags: [User]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: List of linked users
+ *
+ * /api/v1/user/linked-accounts/{id}:
+ *   delete:
+ *     summary: Remove/Unlink a user from account
+ *     tags: [User]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: string }
+ *     responses:
+ *       200:
+ *         description: User unlinked successfully
  */
 
 /**

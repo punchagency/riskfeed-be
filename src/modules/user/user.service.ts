@@ -8,6 +8,7 @@ import MakeID from '../../utils/MakeID';
 import { RegisterUserDto } from './dto/register-user.dto';
 import { ActivateAccountDto, ChangePasswordDto, ForgotPasswordDto, LoginDto, RefreshTokenDto, ResendActivationCodeDto, ResendResetPasswordCodeDto, ResetPasswordDto, ValidateTokenDto} from './dto/auth-requests.dto';
 import { UpdateProfileDto } from './dto/update-profile.dto';
+import { AddLinkedUserDto } from './dto/linked-account.dto';
 import { addEmailJob } from '../../integrations/QueueManager';
 const SALT_ROUNDS = 10;
 
@@ -43,9 +44,27 @@ export class UserService {
     return rest;
   }
   async register(payload: RegisterUserDto) {
-    const existing = await User.findOne({ email: payload.email.toLowerCase().trim() });
-    if (existing) {
-      throw new BadRequestException('Email already registered');
+    let user = await User.findOne({ email: payload.email.toLowerCase().trim() });
+    
+    if (user) {
+      // If the user already has a password or firstName, it's not a placeholder
+      if (user.password || user.status === 'active' || user.firstName) {
+        throw new BadRequestException('Email already registered');
+      }
+      // This means the user is a placeholder created by invitation.
+    } else {
+      const existingPhone = await User.findOne({ phoneNumber: payload.phoneNumber.trim() });
+      if (existingPhone) {
+        throw new BadRequestException('Phone number already registered');
+      }
+    }
+
+    if (user) {
+      // Also check phone number for the placeholder update
+      const existingPhone = await User.findOne({ phoneNumber: payload.phoneNumber.trim() });
+      if (existingPhone && existingPhone._id.toString() !== user._id.toString()) {
+        throw new BadRequestException('Phone number already registered');
+      }
     }
 
     const passwordHash = await bcrypt.hash(payload.password, SALT_ROUNDS);
@@ -56,22 +75,55 @@ export class UserService {
 
     const { contractorData, ...userData } = payload;
 
-    const user = await User.create({
-      ...userData,
-      email: payload.email.toLowerCase().trim(),
-      phoneNumber: payload.phoneNumber.trim(),
-      password: passwordHash,
-      activationCode,
-      activationCodeExpires,
-      role: payload.role || (contractorData ? 'contractor' : 'user'),
-    });
+    if (user) {
+      // Update existing placeholder user
+      user.firstName = userData.firstName;
+      user.lastName = userData.lastName;
+      user.phoneNumber = userData.phoneNumber.trim();
+      user.address = userData.address;
+      if (userData.profilePicture) user.profilePicture = userData.profilePicture;
+      if (userData.notificationPreferences) {
+        user.notificationPreferences = {
+          ...user.notificationPreferences,
+          ...userData.notificationPreferences,
+        };
+      }
+      if (userData.heardAboutRiskfeed) user.heardAboutRiskfeed = userData.heardAboutRiskfeed as any;
+      if (userData.parentAccount) user.parentAccount = userData.parentAccount as any;
+      if (userData.accountRole) user.accountRole = userData.accountRole;
+      
+      user.password = passwordHash;
+      user.activationCode = activationCode;
+      user.activationCodeExpires = activationCodeExpires;
+      user.role = userData.role || (contractorData ? 'contractor' : 'user');
+      
+      await user.save();
+    } else {
+      user = await User.create({
+        ...userData,
+        email: payload.email.toLowerCase().trim(),
+        phoneNumber: payload.phoneNumber.trim(),
+        password: passwordHash,
+        activationCode,
+        activationCodeExpires,
+        role: payload.role || (contractorData ? 'contractor' : 'user'),
+        parentAccount: payload.parentAccount as any,
+        accountRole: payload.accountRole,
+      });
+    }
 
-    // Create contractor profile if contractor data provided
+    // Create or update contractor profile if contractor data provided
     if (contractorData && user.role === 'contractor') {
-      await ContractorModel.create({
-        ...contractorData,
-        user: user._id,
-      } as any);
+      const existingContractor = await ContractorModel.findOne({ user: user._id });
+      if (existingContractor) {
+        Object.assign(existingContractor, contractorData);
+        await existingContractor.save();
+      } else {
+        await ContractorModel.create({
+          ...contractorData,
+          user: user._id,
+        } as any);
+      }
     }
 
     // Queue registration/activation email
@@ -310,8 +362,6 @@ export class UserService {
     }
 
     // Homeowner fields
-    if (payload.ownershipType !== undefined) user.ownershipType = payload.ownershipType;
-    if (payload.properties !== undefined) user.properties = payload.properties as any;
     if (payload.heardAboutRiskfeed !== undefined) user.heardAboutRiskfeed = payload.heardAboutRiskfeed as any;
 
     await user.save();
@@ -434,6 +484,77 @@ export class UserService {
 
     return {
       message: 'Password reset successfully',
+    };
+  }
+
+  async addLinkedUser(parentUserId: string, payload: AddLinkedUserDto) {
+    const parent = await User.findById(parentUserId);
+    if (!parent) {
+      throw new NotFoundException('Parent user not found');
+    }
+
+    const existing = await User.findOne({ email: payload.email.toLowerCase().trim() });
+    if (existing) {
+      throw new BadRequestException('Email already registered');
+    }
+
+    const passwordHash = await bcrypt.hash(payload.password, SALT_ROUNDS);
+    const activationCode = MakeID(6);
+    const activationCodeExpires = new Date(
+      Date.now() + CONFIG.settings.VERIFICATION_CODE_EXPIRATION_DURATION * 60 * 1000,
+    );
+
+    const user = await User.create({
+      ...payload,
+      email: payload.email.toLowerCase().trim(),
+      phoneNumber: payload.phoneNumber.trim(),
+      password: passwordHash,
+      activationCode,
+      activationCodeExpires,
+      role: parent.role,
+      parentAccount: parent._id as any,
+      accountRole: payload.accountRole || 'member',
+      status: 'pending',
+      address: parent.address, // Inherit address from parent
+    });
+
+    await addEmailJob({
+      email: user.email,
+      subject: `Invitation to join ${parent.firstName}'s RiskFeed account`,
+      html: `
+        <p>Hi ${user.firstName},</p>
+        <p>${parent.firstName} ${parent.lastName} has invited you to join their RiskFeed account.</p>
+        <p>Your activation code is: <strong>${activationCode}</strong></p>
+      `,
+    });
+
+    return {
+      message: 'Linked user created. Invitation email sent.',
+      user: this.sanitizeUser(user),
+    };
+  }
+
+  async getLinkedAccounts(userId: string) {
+    const users = await User.find({ parentAccount: userId }).select('-password -refreshToken -activationCode -activationCodeExpires -resetPasswordCode -resetPasswordCodeExpires').lean();
+    return {
+      success: true,
+      data: users,
+    };
+  }
+
+  async removeLinkedUser(parentUserId: string, linkedUserId: string) {
+    const user = await User.findOne({ _id: linkedUserId, parentAccount: parentUserId });
+    if (!user) {
+      throw new NotFoundException('Linked user not found');
+    }
+
+    user.parentAccount = undefined;
+    user.accountRole = 'owner'; // Becomes its own owner but usually they'd just be deleted if unwanted
+    await user.save();
+
+    return {
+      success: true,
+      message: 'User unlinked successfully',
     };
   }
 }

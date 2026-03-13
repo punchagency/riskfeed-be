@@ -1,9 +1,10 @@
-import { Body, Controller, Get, Patch, Post, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, Post, Req, UseGuards } from '@nestjs/common';
 import { UserService } from './user.service';
 import { RegisterUserDto } from './dto/register-user.dto';
 import { ActivateAccountDto, ChangePasswordDto, ForgotPasswordDto, LoginDto, RefreshTokenDto, ResendActivationCodeDto, ResendResetPasswordCodeDto, ResetPasswordDto, ValidateTokenDto } from './dto/auth-requests.dto';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { UpdateProfileDto } from './dto/update-profile.dto';
+import { AddLinkedUserDto } from './dto/linked-account.dto';
 import type AuthenticatedRequest from '@/auth/auth-user.interface';
 
 @Controller('user')
@@ -12,11 +13,16 @@ export class UserController {
 
   @Post('register')
   register(@Body() payload: RegisterUserDto, @Req() req: any) {
-    const files = (req as any).files as { profilePicture?: Array<{ location: string }> } | undefined;
-    const profileFile = files?.profilePicture?.[0];
-    if (profileFile?.location) {
-      payload.profilePicture = profileFile.location;
+    const files = (req as any).files as { profilePicture?: Array<{ location: string }>, companyLogo?: Array<{ location: string }> } | undefined;
+    
+    if (files?.profilePicture?.[0]?.location) {
+      payload.profilePicture = files.profilePicture[0].location;
     }
+    
+    if (files?.companyLogo?.[0]?.location && payload.contractorData) {
+      payload.contractorData.companyLogo = files.companyLogo[0].location;
+    }
+    
     return this.userService.register(payload);
   }
 
@@ -56,7 +62,31 @@ export class UserController {
   @Patch('profile')
   @UseGuards(JwtAuthGuard)
   updateProfile(@Req() req: AuthenticatedRequest, @Body() payload: UpdateProfileDto) {
+    const files = (req as any).files as { companyLogo?: Array<{ location: string }> } | undefined;
+    
+    if (files?.companyLogo?.[0]?.location && payload.contractorData) {
+      payload.contractorData.companyLogo = files.companyLogo[0].location;
+    }
+    
     return this.userService.updateProfile(req?.user?._id, payload);
+  }
+
+  @Post('linked-accounts')
+  @UseGuards(JwtAuthGuard)
+  addLinkedUser(@Req() req: AuthenticatedRequest, @Body() payload: AddLinkedUserDto) {
+    return this.userService.addLinkedUser(req.user._id, payload);
+  }
+
+  @Get('linked-accounts')
+  @UseGuards(JwtAuthGuard)
+  getLinkedAccounts(@Req() req: AuthenticatedRequest) {
+    return this.userService.getLinkedAccounts(req.user._id);
+  }
+
+  @Delete('linked-accounts/:id')
+  @UseGuards(JwtAuthGuard)
+  removeLinkedAccount(@Req() req: AuthenticatedRequest, @Param('id') linkedUserId: string) {
+    return this.userService.removeLinkedUser(req.user._id, linkedUserId);
   }
 
   @Post('activate-account')

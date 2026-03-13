@@ -6,7 +6,22 @@ export const VERIFICATION_STATUSES = ['not_started', 'in_progress', 'verified', 
 export const TEAM_SIZE_BUCKETS = ['solo', 'one_to_five', 'six_to_ten', 'eleven_to_twenty-five', 'twenty-five_to_fifty', 'fifty_plus'] as const;
 export const CONTRACTOR_STATUSES = ['pending', 'active', 'suspended', 'deleted'] as const;
 export const CERTIFICATE_STATUSES = ['under review', 'verified', 'expired'] as const;
+export const CORPORATION_TYPES = ['sole_proprietorship', 'partnership', 'limited_liability_company', 'corporation', 'other'] as const;
 
+
+export interface IContractorLicense {
+    number: string;
+    description: string;
+    state: string;
+}
+
+export interface IBusinessAddress {
+    street: string;
+    zipcode: string;
+    city: string;
+    state: string;
+    country: string;
+}
 
 export interface IContractorReview {
     rating: number;
@@ -59,20 +74,15 @@ export interface IContractor extends Document {
     user: Types.ObjectId;
     companyName: string;
     businessName?: string;
-    licenseNumber: string;
-    yearsInBusiness: number;
+    companyLogo?: string;
+    licenses: IContractorLicense[];
+    corporationType: typeof CORPORATION_TYPES[number];
+    yearEstablished: number;
     taxId: string;
-    ownerName?: string;
     businessEmail: string;
     businessPhone: string;
     businessWebsite?: string;
-    businessAddress: {
-        street: string;
-        zipcode: string;
-        city: string;
-        state: string;
-        country: string;
-    };
+    businessAddresses: IBusinessAddress[];
     services: typeof PROJECT_TYPES[number][];
     serviceAreas: string[];
     teamSize?: typeof TEAM_SIZE_BUCKETS[number];
@@ -89,6 +99,26 @@ export interface IContractor extends Document {
     completedProjects: number;
     averageBudget: number;
 }
+
+const ContractorLicenseSchema = new Schema<IContractorLicense>(
+    {
+        number: { type: String, required: true },
+        description: { type: String, required: true },
+        state: { type: String, required: true },
+    },
+    { _id: true }
+);
+
+const BusinessAddressSchema = new Schema<IBusinessAddress>(
+    {
+        street: { type: String, required: true },
+        zipcode: { type: String, required: true },
+        city: { type: String, required: true },
+        state: { type: String, required: true },
+        country: { type: String, required: true },
+    },
+    { _id: true }
+);
 
 const ContractorReviewSchema = new Schema<IContractorReview>(
     {
@@ -158,22 +188,17 @@ const ContractorVerificationSchema = new Schema<IContractorVerification>(
 const ContractorSchema = new Schema<IContractor>(
     {
         user: { type: Schema.Types.ObjectId, ref: 'User', required: true, index: true },
-        companyName: { type: String, required: true },
+        companyName: { type: String },
         businessName: { type: String },
-        licenseNumber: { type: String, required: true },
-        yearsInBusiness: { type: Number, required: true },
-        taxId: { type: String, required: true },
-        ownerName: { type: String },
-        businessEmail: { type: String, required: true },
-        businessPhone: { type: String, required: true },
+        companyLogo: { type: String },
+        licenses: { type: [ContractorLicenseSchema], default: [] },
+        corporationType: { type: String, enum: CORPORATION_TYPES },
+        yearEstablished: { type: Number },
+        taxId: { type: String },
+        businessEmail: { type: String },
+        businessPhone: { type: String },
         businessWebsite: { type: String },
-        businessAddress: {
-            street: { type: String, required: true },
-            zipcode: { type: String, required: true },
-            city: { type: String, required: true },
-            state: { type: String, required: true },
-            country: { type: String, required: true },
-        },
+        businessAddresses: { type: [BusinessAddressSchema], default: [] },
         services: { type: [String], enum: PROJECT_TYPES, default: [] },
         serviceAreas: { type: [String], default: [] },
         teamSize: { type: String, enum: TEAM_SIZE_BUCKETS },

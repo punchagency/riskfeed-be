@@ -1,5 +1,5 @@
-import { USER_STATUSES, ROLES, PROPERTY_TYPES, OWNERSHIP_TYPES, HEARD_ABOUT_SOURCES } from '../../../models/user.model';
-import { TEAM_SIZE_BUCKETS } from '../../../models/contractor.model';
+import { USER_STATUSES, ROLES, HEARD_ABOUT_SOURCES, ACCOUNT_ROLES } from '../../../models/user.model';
+import { TEAM_SIZE_BUCKETS, CORPORATION_TYPES } from '../../../models/contractor.model';
 import {
   IsEmail,
   IsOptional,
@@ -11,8 +11,11 @@ import {
   IsArray,
   IsNumber,
   IsDate,
+  Min,
+  Max,
+  ArrayMinSize,
 } from 'class-validator';
-import { Type } from 'class-transformer';
+import { Transform, Type } from 'class-transformer';
 import { PROJECT_TYPES } from '@/models/project.model';
 
 class AddressDto {
@@ -46,27 +49,6 @@ class NotificationPreferencesDto {
   marketingCommunications?: boolean;
 }
 
-class PropertyDto {
-  @IsEnum(PROPERTY_TYPES)
-  type: typeof PROPERTY_TYPES[number];
-
-  @IsOptional()
-  @IsString()
-  name?: string;
-
-  @ValidateNested()
-  @Type(() => AddressDto)
-  address: AddressDto;
-
-  @IsOptional()
-  @IsEnum(OWNERSHIP_TYPES)
-  ownershipType?: typeof OWNERSHIP_TYPES[number];
-
-  @IsOptional()
-  @IsString()
-  notes?: string;
-}
-
 class HeardAboutDto {
   @IsEnum(HEARD_ABOUT_SOURCES)
   source: typeof HEARD_ABOUT_SOURCES[number];
@@ -93,6 +75,17 @@ class InsuranceDto {
   expiryDate?: Date;
 }
 
+class LicenseDto {
+  @IsString()
+  number: string;
+
+  @IsString()
+  description: string;
+
+  @IsString()
+  state: string;
+}
+
 class ContractorDataDto {
   @IsString()
   companyName: string;
@@ -101,18 +94,27 @@ class ContractorDataDto {
   @IsString()
   businessName?: string;
 
+  @IsOptional()
   @IsString()
-  licenseNumber: string;
+  companyLogo?: string;
+
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => LicenseDto)
+  @ArrayMinSize(1)
+  licenses: LicenseDto[];
+
+  @IsEnum(CORPORATION_TYPES)
+  corporationType: typeof CORPORATION_TYPES[number];
 
   @IsNumber()
-  yearsInBusiness: number;
+  @Type(() => Number)
+  @Min(1800)
+  @Max(new Date().getFullYear())
+  yearEstablished: number;
 
   @IsString()
   taxId: string;
-
-  @IsOptional()
-  @IsString()
-  ownerName?: string;
 
   @IsString()
   businessEmail: string;
@@ -124,15 +126,18 @@ class ContractorDataDto {
   @IsString()
   businessWebsite?: string;
 
-  @ValidateNested()
+  @IsArray()
+  @ValidateNested({ each: true })
   @Type(() => AddressDto)
-  businessAddress: AddressDto;
+  @ArrayMinSize(1)
+  businessAddresses: AddressDto[];
 
   @IsArray()
   @IsEnum(PROJECT_TYPES, { each: true })
   services: typeof PROJECT_TYPES[number][];
 
   @IsArray()
+  @Transform(({ value }) => value.split(",").map((item: string) => item.trim()))
   @IsString({ each: true })
   serviceAreas: string[];
 
@@ -184,17 +189,6 @@ export class RegisterUserDto {
   @IsEnum(USER_STATUSES)
   status?: (typeof USER_STATUSES)[number];
 
-  // Homeowner fields
-  @IsOptional()
-  @IsEnum(OWNERSHIP_TYPES)
-  ownershipType?: typeof OWNERSHIP_TYPES[number];
-
-  @IsOptional()
-  @IsArray()
-  @ValidateNested({ each: true })
-  @Type(() => PropertyDto)
-  properties?: PropertyDto[];
-
   @IsOptional()
   @ValidateNested()
   @Type(() => HeardAboutDto)
@@ -205,5 +199,13 @@ export class RegisterUserDto {
   @ValidateNested()
   @Type(() => ContractorDataDto)
   contractorData?: ContractorDataDto;
-}
 
+  // Linked account fields
+  @IsOptional()
+  @IsString()
+  parentAccount?: string;
+
+  @IsOptional()
+  @IsEnum(ACCOUNT_ROLES)
+  accountRole?: typeof ACCOUNT_ROLES[number];
+}

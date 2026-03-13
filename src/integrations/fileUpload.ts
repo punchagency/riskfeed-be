@@ -2,7 +2,8 @@ import { S3Client, DeleteObjectCommand, GetObjectCommand } from '@aws-sdk/client
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import multer, { FileFilterCallback } from 'multer';
 import multerS3 from 'multer-s3';
-import { Request } from 'express';
+import { Request, Response, NextFunction } from 'express';
+import { BadRequestException } from '@nestjs/common';
 import path from 'path';
 import crypto from 'crypto';
 import { logError, logInfo } from '../utils/SystemLogs';
@@ -40,23 +41,28 @@ class FileUploadService {
     private readonly FILE_CONFIGS: Record<string, IFileUploadConfig> = {
         profilePicture: {
             maxFileSize: 5 * 1024 * 1024, // 5MB
-            allowedMimeTypes: ['image/jpeg', 'image/png', 'image/jpg', 'image/webp', 'image/heic'],
+            allowedMimeTypes: ['image/jpeg', 'image/png', 'image/jpg', 'image/webp', 'image/heic', 'image/svg+xml'],
             maxCount: 1
         },
         propertyImages: {
             maxFileSize: 25 * 1024 * 1024, // 25MB
-            allowedMimeTypes: ['image/jpeg', 'image/png', 'image/jpg', 'image/webp', 'image/heic'],
+            allowedMimeTypes: ['image/jpeg', 'image/png', 'image/jpg', 'image/webp', 'image/heic', 'image/svg+xml'],
             maxCount: 10
         },
         projectImages: {
             maxFileSize: 25 * 1024 * 1024, // 25MB
-            allowedMimeTypes: ['image/jpeg', 'image/png', 'image/jpg', 'image/webp', 'image/heic'],
+            allowedMimeTypes: ['image/jpeg', 'image/png', 'image/jpg', 'image/webp', 'image/heic', 'image/svg+xml'],
             maxCount: 10
         },
         projectDocuments: {
             maxFileSize: 25 * 1024 * 1024, // 25MB
-            allowedMimeTypes: ['image/jpeg', 'image/png', 'image/jpg', 'image/webp', 'image/heic', 'application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'image/jpeg', 'image/png', 'image/jpg'],
+            allowedMimeTypes: ['image/jpeg', 'image/png', 'image/jpg', 'image/webp', 'image/heic', 'image/svg+xml', 'application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'image/jpeg', 'image/png', 'image/jpg'],
             maxCount: 10
+        },
+        companyLogo: {
+            maxFileSize: 5 * 1024 * 1024, // 5MB
+            allowedMimeTypes: ['image/jpeg', 'image/png', 'image/jpg', 'image/webp', 'image/heic', 'image/svg+xml'],
+            maxCount: 1
         },
     };
 
@@ -87,12 +93,12 @@ class FileUploadService {
         const config = this.FILE_CONFIGS[file.fieldname];
 
         if (!config) {
-            cb(new Error(`Unsupported field: ${file.fieldname}`));
+            cb(new BadRequestException(`Unsupported field: ${file.fieldname}`));
             return;
         }
 
         if (!config.allowedMimeTypes.includes(file.mimetype)) {
-            cb(new Error(`Invalid file type for ${file.fieldname}. Allowed types: ${config.allowedMimeTypes.join(', ')}`));
+            cb(new BadRequestException(`Invalid file type for ${file.fieldname}. Allowed types: ${config.allowedMimeTypes.join(', ')}`));
             return;
         }
 
@@ -126,10 +132,25 @@ class FileUploadService {
     }
 
     public createUploadMiddleware(fieldConfigs: Array<{ name: string; maxCount?: number }>) {
-        return multer(this.getMulterOptions()).fields(fieldConfigs.map(config => ({
+        const upload = multer(this.getMulterOptions()).fields(fieldConfigs.map(config => ({
             name: config.name,
             maxCount: config.maxCount || this.FILE_CONFIGS[config.name]?.maxCount || 1
         })));
+
+        return (req: Request, res: Response, next: NextFunction) => {
+            upload(req, res, (err: any) => {
+                if (err) {
+                    if (err instanceof BadRequestException) {
+                        return next(err);
+                    }
+                    if (err instanceof multer.MulterError) {
+                        return next(new BadRequestException(err.message));
+                    }
+                    return next(new BadRequestException(err.message));
+                }
+                next();
+            });
+        };
     }
 
 
@@ -198,6 +219,13 @@ class FileUploadService {
 export const fileUploadService = new FileUploadService();
 export const profilePictureUploadMiddleware = fileUploadService.createUploadMiddleware([
     { name: 'profilePicture', maxCount: 1 },
+]);
+export const registrationUploadMiddleware = fileUploadService.createUploadMiddleware([
+    { name: 'profilePicture', maxCount: 1 },
+    { name: 'companyLogo', maxCount: 1 },
+]);
+export const companyLogoUploadMiddleware = fileUploadService.createUploadMiddleware([
+    { name: 'companyLogo', maxCount: 1 },
 ]);
 export const projectFilesUploadMiddleware = fileUploadService.createUploadMiddleware([
     { name: 'propertyImages', maxCount: 10 },
